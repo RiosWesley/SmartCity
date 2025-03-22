@@ -1,4 +1,4 @@
-# Documentação Completa: Projeto Smart City com ESP32
+# Documentação Completa: Projeto CityNexus (Smart City com ESP32)
 
 ## Sumário
 1. [Visão Geral do Projeto](#1-visão-geral-do-projeto)
