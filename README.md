@@ -45,7 +45,7 @@ O projeto abrange:
 ## 2. Arquitetura do Sistema
 
 ### 2.1 Visão Geral da Arquitetura
-
+ 
 ```
 ┌─────────────────┐      ┌────────────────┐      ┌─────────────────┐
 │  Dispositivos   │      │   Firebase     │      │  Aplicação      │
