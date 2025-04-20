@@ -1,19 +1,19 @@
-
-import React, { useState } from "react";
+import React, { useState, useMemo } from "react";
 import { motion } from "framer-motion";
 import DashboardLayout from "@/layout/DashboardLayout";
 import { StatusIndicator } from "@/components/StatusIndicator";
 import { AlertCard } from "@/components/AlertCard";
 import { StatsCard } from "@/components/StatsCard";
-import { 
-  Bell, 
-  AlertTriangle, 
-  AlertOctagon, 
-  Info, 
-  CheckCircle2, 
-  Filter, 
-  Clock, 
-  Search 
+import {
+  Bell,
+  AlertTriangle,
+  AlertOctagon,
+  Info,
+  CheckCircle2,
+  Filter,
+  Clock,
+  Search,
+  Loader2
 } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
@@ -27,84 +27,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 
-// Mock alerts data
-const activeAlerts = [
-  {
-    id: 1,
-    title: "Falha no sensor de iluminação",
-    message: "O sensor de iluminação ID-3245 não está respondendo há 15 minutos.",
-    timestamp: "Há 35 minutos",
-    location: "Av. Paulista, 1000",
-    severity: "warning",
-    system: "lighting",
-  },
-  {
-    id: 2,
-    title: "Congestionamento severo detectado",
-    message: "Tráfego intenso detectado na região central. Tempo de espera estimado: 25 min.",
-    timestamp: "Há 12 minutos",
-    location: "Av. Rebouças",
-    severity: "critical",
-    system: "traffic",
-  },
-  {
-    id: 3,
-    title: "Qualidade do ar abaixo do ideal",
-    message: "Níveis de poluição acima do normal detectados na zona leste.",
-    timestamp: "Há 1 hora",
-    location: "Zona Leste",
-    severity: "info",
-    system: "environment",
-  },
-  {
-    id: 4,
-    title: "Luminosidade insuficiente",
-    message: "Detectada iluminação abaixo do nível mínimo no setor 5B.",
-    timestamp: "Há 25 minutos",
-    location: "Setor 5B, Centro",
-    severity: "warning",
-    system: "lighting",
-  },
-  {
-    id: 5,
-    title: "Fluxo de tráfego anormal",
-    message: "Padrão de tráfego anormal detectado. Possível acidente ou bloqueio.",
-    timestamp: "Há 5 minutos",
-    location: "Marginal Pinheiros, km 15",
-    severity: "critical",
-    system: "traffic",
-  },
-];
-
-const resolvedAlerts = [
-  {
-    id: 101,
-    title: "Falha no semáforo",
-    message: "Semáforo ID-7890 operando em modo de emergência.",
-    timestamp: "Resolvido há 2h",
-    location: "Cruzamento Rua Augusta",
-    severity: "warning",
-    system: "traffic",
-  },
-  {
-    id: 102,
-    title: "Nível de ruído elevado",
-    message: "Níveis de ruído acima de 85dB detectados na zona central.",
-    timestamp: "Resolvido há 4h",
-    location: "Centro",
-    severity: "info",
-    system: "environment",
-  },
-  {
-    id: 103,
-    title: "Falha de energia em poste",
-    message: "Poste ID-2341 sem energia elétrica.",
-    timestamp: "Resolvido há 6h",
-    location: "Av. Paulista, 1200",
-    severity: "warning",
-    system: "lighting",
-  },
-];
+import useFirebaseData from "@/hooks/useFirebaseData"; // Import the hook
 
 const alertCategories = [
   { value: "all", label: "Todos" },
@@ -125,22 +48,105 @@ const Alerts = () => {
   const [categoryFilter, setCategoryFilter] = useState("all");
   const [systemFilter, setSystemFilter] = useState("all");
 
+  // Fetch alerts data from Firebase
+  const { data: alertsData, loading, error } = useFirebaseData('/alerts');
+
+  // Convert Firebase object data to array and filter
+  const allAlerts = useMemo(() => {
+    if (!alertsData) return [];
+    return Object.keys(alertsData).map(key => ({
+      id: key, // Use Firebase key as ID
+      ...alertsData[key],
+      // Map Firebase severity to local severity if needed, assuming they match for now
+      severity: alertsData[key].severity.toLowerCase(),
+      // Map Firebase sourceDeviceType to local system type
+      system: alertsData[key].sourceDeviceType.replace('_sensor', '').replace('_controller', ''),
+      // Format timestamp (example, adjust as needed)
+      timestamp: new Date(alertsData[key].creationTimestamp).toLocaleString(),
+      location: alertsData[key].location?.description || 'Localização desconhecida',
+    }));
+  }, [alertsData]);
+
+  const activeAlerts = useMemo(() => {
+    return allAlerts.filter(alert => alert.status === 'NEW');
+  }, [allAlerts]);
+
+  const resolvedAlerts = useMemo(() => {
+    return allAlerts.filter(alert => alert.status !== 'NEW');
+  }, [allAlerts]);
+
+
   // Filter active alerts based on the current filters
-  const filteredActiveAlerts = activeAlerts.filter(alert => {
-    // Apply search filter
-    const matchesSearch = searchQuery === "" || 
-      alert.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      alert.message.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      alert.location.toLowerCase().includes(searchQuery.toLowerCase());
-    
-    // Apply category filter
-    const matchesCategory = categoryFilter === "all" || alert.severity === categoryFilter;
-    
-    // Apply system filter
-    const matchesSystem = systemFilter === "all" || alert.system === systemFilter;
-    
-    return matchesSearch && matchesCategory && matchesSystem;
-  });
+  const filteredActiveAlerts = useMemo(() => {
+    return activeAlerts.filter(alert => {
+      // Apply search filter
+      const matchesSearch = searchQuery === "" ||
+        alert.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        alert.description.toLowerCase().includes(searchQuery.toLowerCase()) || // Use description from Firebase
+        alert.location.toLowerCase().includes(searchQuery.toLowerCase());
+
+      // Apply category filter
+      const matchesCategory = categoryFilter === "all" || alert.severity === categoryFilter;
+
+      // Apply system filter
+      const matchesSystem = systemFilter === "all" || alert.system === systemFilter;
+
+      return matchesSearch && matchesCategory && matchesSystem;
+    });
+  }, [activeAlerts, searchQuery, categoryFilter, systemFilter]);
+
+  // Filter resolved alerts based on the current filters (optional, but good for consistency)
+  const filteredResolvedAlerts = useMemo(() => {
+    return resolvedAlerts.filter(alert => {
+      // Apply search filter
+      const matchesSearch = searchQuery === "" ||
+        alert.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        alert.description.toLowerCase().includes(searchQuery.toLowerCase()) || // Use description from Firebase
+        alert.location.toLowerCase().includes(searchQuery.toLowerCase());
+
+      // Apply category filter
+      const matchesCategory = categoryFilter === "all" || alert.severity === categoryFilter;
+
+      // Apply system filter
+      const matchesSystem = systemFilter === "all" || alert.system === systemFilter;
+
+      return matchesSearch && matchesCategory && matchesSystem;
+    });
+  }, [resolvedAlerts, searchQuery, categoryFilter, systemFilter]);
+
+
+  // Calculate stats
+  const totalAlertsCount = allAlerts.length;
+  const criticalAlertsCount = allAlerts.filter(alert => alert.severity === 'critical').length;
+  const warningAlertsCount = allAlerts.filter(alert => alert.severity === 'warning').length;
+  const infoAlertsCount = allAlerts.filter(alert => alert.severity === 'info').length;
+
+
+  if (loading) {
+    return (
+      <DashboardLayout>
+        <div className="flex justify-center items-center h-screen">
+          <Loader2 className="h-10 w-10 animate-spin text-city-blue-500" />
+          <span className="ml-3 text-lg text-gray-600">Carregando alertas...</span>
+        </div>
+      </DashboardLayout>
+    );
+  }
+
+  if (error) {
+    return (
+      <DashboardLayout>
+        <div className="text-center p-8">
+          <AlertTriangle size={40} className="text-red-500 mx-auto mb-4" />
+          <h3 className="text-lg font-medium text-gray-900 mb-1">Erro ao carregar alertas</h3>
+          <p className="text-gray-500">
+            Ocorreu um erro ao buscar os dados de alertas do Firebase: {error.message}
+          </p>
+        </div>
+      </DashboardLayout>
+    );
+  }
+
 
   return (
     <DashboardLayout>
@@ -159,24 +165,24 @@ const Alerts = () => {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-6">
         <StatsCard
           title="Total de Alertas"
-          value="38"
+          value={totalAlertsCount.toString()}
           icon={<Bell size={18} />}
         />
         <StatsCard
           title="Alertas Críticos"
-          value="5"
+          value={criticalAlertsCount.toString()}
           variant="red"
           icon={<AlertOctagon size={18} />}
         />
         <StatsCard
           title="Alertas de Aviso"
-          value="12"
+          value={warningAlertsCount.toString()}
           variant="amber"
           icon={<AlertTriangle size={18} />}
         />
         <StatsCard
           title="Alertas Informativos"
-          value="21"
+          value={infoAlertsCount.toString()}
           variant="blue"
           icon={<Info size={18} />}
         />
@@ -242,16 +248,16 @@ const Alerts = () => {
             <TabsList className="grid grid-cols-2 w-auto">
               <TabsTrigger value="active" className="flex items-center gap-2">
                 <AlertTriangle size={14} />
-                Ativos
+                Ativos ({filteredActiveAlerts.length})
               </TabsTrigger>
               <TabsTrigger value="resolved" className="flex items-center gap-2">
                 <CheckCircle2 size={14} />
-                Resolvidos
+                Resolvidos ({filteredResolvedAlerts.length})
               </TabsTrigger>
             </TabsList>
           </div>
         </div>
-        
+
         <TabsContent value="active" className="mt-0">
           <div className="space-y-4">
             {filteredActiveAlerts.length > 0 ? (
@@ -259,12 +265,12 @@ const Alerts = () => {
                 <AlertCard
                   key={alert.id}
                   title={alert.title}
-                  message={alert.message}
+                  message={alert.description} // Use description from Firebase
                   timestamp={alert.timestamp}
                   location={alert.location}
                   severity={alert.severity as any}
-                  onDismiss={() => console.log("Dismiss alert", alert.id)}
-                  onView={() => console.log("View alert", alert.id)}
+                  onDismiss={() => console.log("Dismiss alert", alert.id)} // Implement Firebase update later
+                  onView={() => console.log("View alert", alert.id)} // Implement view logic later
                   className="animate-fade-in"
                 />
               ))
@@ -281,39 +287,51 @@ const Alerts = () => {
             )}
           </div>
         </TabsContent>
-        
+
         <TabsContent value="resolved" className="mt-0">
           <div className="space-y-4">
-            {resolvedAlerts.map((alert) => (
-              <div key={alert.id} className="glass-card rounded-xl p-4 border border-gray-200 animate-fade-in">
-                <div className="flex items-start">
-                  <div className="flex-shrink-0 opacity-60">
-                    {alert.severity === "info" && <Info size={20} className="text-city-blue-500" />}
-                    {alert.severity === "warning" && <AlertTriangle size={20} className="text-city-amber-500" />}
-                    {alert.severity === "critical" && <AlertOctagon size={20} className="text-city-red-500" />}
-                  </div>
-                  <div className="ml-3 flex-1">
-                    <div className="flex items-center justify-between">
-                      <h3 className="text-sm font-medium text-gray-700">{alert.title}</h3>
-                      <Badge variant="outline" className="bg-city-green-50 text-city-green-700 border-city-green-200">
-                        Resolvido
-                      </Badge>
+            {filteredResolvedAlerts.length > 0 ? (
+              filteredResolvedAlerts.map((alert) => (
+                <div key={alert.id} className="glass-card rounded-xl p-4 border border-gray-200 animate-fade-in">
+                  <div className="flex items-start">
+                    <div className="flex-shrink-0 opacity-60">
+                      {alert.severity === "info" && <Info size={20} className="text-city-blue-500" />}
+                      {alert.severity === "warning" && <AlertTriangle size={20} className="text-city-amber-500" />}
+                      {alert.severity === "critical" && <AlertOctagon size={20} className="text-city-red-500" />}
                     </div>
-                    <div className="mt-1 text-sm text-gray-600">{alert.message}</div>
-                    <div className="mt-2 flex items-center text-xs text-gray-500">
-                      <Clock size={12} className="mr-1" />
-                      <span>{alert.timestamp}</span>
-                      {alert.location && (
-                        <>
-                          <span className="mx-1">•</span>
-                          <span>{alert.location}</span>
-                        </>
-                      )}
+                    <div className="ml-3 flex-1">
+                      <div className="flex items-center justify-between">
+                        <h3 className="text-sm font-medium text-gray-700">{alert.title}</h3>
+                        <Badge variant="outline" className="bg-city-green-50 text-city-green-700 border-city-green-200">
+                          Resolvido
+                        </Badge>
+                      </div>
+                      <div className="mt-1 text-sm text-gray-600">{alert.description}</div> {/* Use description */}
+                      <div className="mt-2 flex items-center text-xs text-gray-500">
+                        <Clock size={12} className="mr-1" />
+                        <span>{alert.timestamp}</span>
+                        {alert.location && (
+                          <>
+                            <span className="mx-1">•</span>
+                            <span>{alert.location}</span>
+                          </>
+                        )}
+                      </div>
                     </div>
                   </div>
                 </div>
+              ))
+            ) : (
+              <div className="p-8 text-center">
+                <div className="mx-auto w-12 h-12 rounded-full bg-gray-100 flex items-center justify-center mb-4">
+                  <CheckCircle2 size={24} className="text-gray-400" />
+                </div>
+                <h3 className="text-lg font-medium text-gray-900 mb-1">Nenhum alerta resolvido encontrado</h3>
+                <p className="text-gray-500">
+                  Não foram encontrados alertas resolvidos que correspondam aos seus filtros.
+                </p>
               </div>
-            ))}
+            )}
           </div>
         </TabsContent>
       </Tabs>
@@ -360,6 +378,7 @@ const Alerts = () => {
       </div>
 
       {/* Alert Statistics */}
+      {/* These stats are still mock data. Need to implement calculation based on Firebase data. */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div className="glass-card rounded-xl p-5 border border-white/30">
           <h3 className="font-semibold mb-4">Distribuição por Sistema</h3>
@@ -393,7 +412,7 @@ const Alerts = () => {
             </div>
           </div>
         </div>
-        
+
         <div className="glass-card rounded-xl p-5 border border-white/30">
           <h3 className="font-semibold mb-4">Tempo Médio de Resolução</h3>
           <div className="space-y-4">

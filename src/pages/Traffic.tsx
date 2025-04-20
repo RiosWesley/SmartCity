@@ -18,80 +18,35 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 
-// Mock data for traffic page
-const trafficFlowData = [
-  { name: "00:00", flow: 120 },
-  { name: "04:00", flow: 80 },
-  { name: "08:00", flow: 520 },
-  { name: "12:00", flow: 380 },
-  { name: "16:00", flow: 440 },
-  { name: "20:00", flow: 350 },
-  { name: "24:00", flow: 180 },
-];
-
-const trafficTrendData = [
-  { name: "Seg", vehicles: 12450 },
-  { name: "Ter", vehicles: 13280 },
-  { name: "Qua", vehicles: 12890 },
-  { name: "Qui", vehicles: 13520 },
-  { name: "Sex", vehicles: 14780 },
-  { name: "Sáb", vehicles: 10240 },
-  { name: "Dom", vehicles: 8950 },
-];
-
-const trafficCongestionData = [
-  { name: "Sem Congestionamento", value: 55 },
-  { name: "Leve", value: 25 },
-  { name: "Moderado", value: 12 },
-  { name: "Severo", value: 8 },
-];
-
-const trafficHotspots = [
-  { 
-    id: 1, 
-    location: "Av. Paulista x Av. Rebouças", 
-    status: "severe", 
-    flow: 720, 
-    avgSpeed: 12, 
-    waitTime: "25 min",
-    congestionLevel: 85
-  },
-  { 
-    id: 2, 
-    location: "Av. 23 de Maio", 
-    status: "moderate", 
-    flow: 850, 
-    avgSpeed: 23, 
-    waitTime: "12 min",
-    congestionLevel: 60
-  },
-  { 
-    id: 3, 
-    location: "Marginal Tietê Zona Norte", 
-    status: "light", 
-    flow: 920, 
-    avgSpeed: 35, 
-    waitTime: "8 min",
-    congestionLevel: 40
-  },
-  { 
-    id: 4, 
-    location: "Av. Faria Lima", 
-    status: "clear", 
-    flow: 680, 
-    avgSpeed: 45, 
-    waitTime: "2 min",
-    congestionLevel: 15
-  },
-];
-
-const trafficControls = [
-  { id: 1, crossroad: "Av. Paulista x Rua Augusta", mode: "adaptive", status: "online" },
-  { id: 2, crossroad: "Av. Brigadeiro x Av. Rebouças", mode: "fixed", status: "online" },
-  { id: 3, crossroad: "Rua Oscar Freire x Rua Haddock Lobo", mode: "adaptive", status: "offline" },
-];
+import { useFirebaseData } from "@/hooks/useFirebaseData";
 
 const Traffic = () => {
+  const { data: trafficFlowData, loading: loadingTrafficFlow, error: errorTrafficFlow } = useFirebaseData("sensors/traffic/flow");
+  const { data: trafficTrendData, loading: loadingTrafficTrend, error: errorTrafficTrend } = useFirebaseData("sensors/traffic/trend");
+  const { data: trafficCongestionData, loading: loadingTrafficCongestion, error: errorTrafficCongestion } = useFirebaseData("sensors/traffic/congestion");
+  const { data: trafficHotspots, loading: loadingTrafficHotspots, error: errorTrafficHotspots } = useFirebaseData("sensors/traffic/hotspots");
+  const { data: trafficControls, loading: loadingTrafficControls, error: errorTrafficControls } = useFirebaseData("devices"); // Assuming traffic controls are devices
+  const { data: trafficStats, loading: loadingTrafficStats, error: errorTrafficStats } = useFirebaseData("stats/traffic");
+  const { data: trafficOverview, loading: loadingTrafficOverview, error: errorTrafficOverview } = useFirebaseData("overview/traffic");
+
+  // Filter traffic controls from devices
+  const trafficDevices = Object.entries(trafficControls || {})
+    .map(([id, device]) => {
+      if (typeof device === 'object' && device !== null && (device as any).deviceType === 'traffic_light') { // Assuming deviceType 'traffic_light'
+        return { id, ...(device as any) };
+      }
+      return null;
+    })
+    .filter(device => device !== null);
+
+  if (loadingTrafficFlow || loadingTrafficTrend || loadingTrafficCongestion || loadingTrafficHotspots || loadingTrafficControls || loadingTrafficStats || loadingTrafficOverview) {
+    return <DashboardLayout><div>Carregando dados de tráfego...</div></DashboardLayout>;
+  }
+
+  if (errorTrafficFlow || errorTrafficTrend || errorTrafficCongestion || errorTrafficHotspots || errorTrafficControls || errorTrafficStats || errorTrafficOverview) {
+    return <DashboardLayout><div>Erro ao carregar dados de tráfego: {errorTrafficFlow?.message || errorTrafficTrend?.message || errorTrafficCongestion?.message || errorTrafficHotspots?.message || errorTrafficControls?.message || errorTrafficStats?.message || errorTrafficOverview?.message}</div></DashboardLayout>;
+  }
+
   return (
     <DashboardLayout>
       <div className="mb-6">
@@ -109,29 +64,29 @@ const Traffic = () => {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-6">
         <StatsCard
           title="Sensores de Tráfego"
-          value="198"
+          value={(trafficStats as any)?.total_sensors?.toString() || 'N/A'}
           icon={<Car size={18} />}
-          variant="teal"
+          variant="blue"
         />
         <StatsCard
           title="Fluxo Total (hoje)"
-          value="124,850"
+          value={(trafficStats as any)?.total_flow?.toLocaleString() || 'N/A'}
           subtitle="veículos"
           icon={<Activity size={18} />}
           variant="blue"
-          trend={{ value: 4.2, positive: true }}
+          trend={(trafficStats as any)?.flow_trend}
         />
         <StatsCard
           title="Tempo Médio de Espera"
-          value="12 min"
-          trend={{ value: 2.1, positive: false }}
+          value={(trafficStats as any)?.avg_wait_time || 'N/A'}
+          trend={(trafficStats as any)?.wait_time_trend}
           icon={<Clock size={18} />}
           variant="amber"
         />
         <StatsCard
           title="Áreas Congestionadas"
-          value="8"
-          trend={{ value: 1, positive: true }}
+          value={(trafficStats as any)?.congested_areas?.toString() || 'N/A'}
+          trend={(trafficStats as any)?.congestion_trend}
           icon={<AlertTriangle size={18} />}
           variant="red"
         />
@@ -164,65 +119,74 @@ const Traffic = () => {
           <Card className="glass-card p-5 h-[400px] flex flex-col">
             <div className="mb-4">
               <h3 className="text-sm font-medium mb-2">Nível de Congestionamento</h3>
+              {/* Assuming trafficCongestionData is an object like { clear: 55, light: 25, moderate: 12, severe: 8 } */}
               <div className="h-4 w-full bg-gray-200 rounded-full overflow-hidden">
                 <div className="flex h-full">
-                  <div className="bg-city-green-500 h-full" style={{ width: "55%" }}></div>
-                  <div className="bg-city-amber-400 h-full" style={{ width: "25%" }}></div>
-                  <div className="bg-city-amber-600 h-full" style={{ width: "12%" }}></div>
-                  <div className="bg-city-red-500 h-full" style={{ width: "8%" }}></div>
+                  <div className="bg-city-green-500 h-full" style={{ width: `${(trafficCongestionData as any)?.clear || 0}%` }}></div>
+                  <div className="bg-city-amber-400 h-full" style={{ width: `${(trafficCongestionData as any)?.light || 0}%` }}></div>
+                  <div className="bg-city-amber-600 h-full" style={{ width: `${(trafficCongestionData as any)?.moderate || 0}%` }}></div>
+                  <div className="bg-city-red-500 h-full" style={{ width: `${(trafficCongestionData as any)?.severe || 0}%` }}></div>
                 </div>
               </div>
               <div className="flex justify-between mt-1 text-xs text-gray-500">
-                <span>Fluido (55%)</span>
-                <span>Leve (25%)</span>
-                <span>Moderado (12%)</span>
-                <span>Severo (8%)</span>
+                <span>Fluido ({(trafficCongestionData as any)?.clear || 0}%)</span>
+                <span>Leve ({(trafficCongestionData as any)?.light || 0}%)</span>
+                <span>Moderado ({(trafficCongestionData as any)?.moderate || 0}%)</span>
+                <span>Severo ({(trafficCongestionData as any)?.severe || 0}%)</span>
               </div>
             </div>
-            
+
             <div className="mb-4">
               <h3 className="text-sm font-medium mb-2">Estatísticas</h3>
               <div className="grid grid-cols-2 gap-3">
                 <div className="bg-white/50 p-3 rounded-lg">
                   <div className="text-xs text-gray-500">Veículos/Hora</div>
-                  <div className="text-lg font-semibold">7,854</div>
+                  <div className="text-lg font-semibold">{(trafficOverview as any)?.vehicles_per_hour?.toLocaleString() || 'N/A'}</div>
                 </div>
                 <div className="bg-white/50 p-3 rounded-lg">
                   <div className="text-xs text-gray-500">Vel. Média</div>
-                  <div className="text-lg font-semibold">28 km/h</div>
+                  <div className="text-lg font-semibold">{(trafficOverview as any)?.avg_speed || 'N/A'} km/h</div>
                 </div>
               </div>
             </div>
-            
+
             <div className="flex-1">
               <h3 className="text-sm font-medium mb-2">Previsão</h3>
               <div className="bg-white/50 p-3 rounded-lg">
                 <div className="flex justify-between items-center mb-2">
                   <div className="text-xs text-gray-500">Próximas 2 horas</div>
-                  <Badge 
-                    variant="outline" 
-                    className="bg-city-amber-50 text-city-amber-700 border-city-amber-200"
+                  <Badge
+                    variant="outline"
+                    className={`
+                      ${(trafficOverview as any)?.forecast_level === 'severe' ? 'bg-city-red-100 text-city-red-800 border-city-red-200' : ''}
+                      ${(trafficOverview as any)?.forecast_level === 'moderate' ? 'bg-city-amber-100 text-city-amber-800 border-city-amber-200' : ''}
+                      ${(trafficOverview as any)?.forecast_level === 'light' ? 'bg-city-amber-50 text-city-amber-600 border-city-amber-100' : ''}
+                      ${(trafficOverview as any)?.forecast_level === 'clear' ? 'bg-city-green-100 text-city-green-800 border-city-green-200' : ''}
+                    `}
                   >
-                    Moderado
+                    {(trafficOverview as any)?.forecast_level === 'severe' && 'Severo'}
+                    {(trafficOverview as any)?.forecast_level === 'moderate' && 'Moderado'}
+                    {(trafficOverview as any)?.forecast_level === 'light' && 'Leve'}
+                    {(trafficOverview as any)?.forecast_level === 'clear' && 'Fluido'}
                   </Badge>
                 </div>
                 <div className="flex items-center gap-2">
                   <div className="flex-1">
                     <div className="h-2 w-full bg-gray-200 rounded-full overflow-hidden">
-                      <div 
-                        className="bg-city-amber-400 h-full" 
-                        style={{ width: "65%" }}
+                      <div
+                        className={`h-full ${(trafficOverview as any)?.forecast_level === 'severe' ? 'bg-city-red-500' : (trafficOverview as any)?.forecast_level === 'moderate' ? 'bg-city-amber-400' : (trafficOverview as any)?.forecast_level === 'light' ? 'bg-city-amber-400' : 'bg-city-green-500'}`}
+                        style={{ width: `${(trafficOverview as any)?.forecast_percentage || 0}%` }}
                       ></div>
                     </div>
                   </div>
-                  <span className="text-xs font-medium">65%</span>
+                  <span className="text-xs font-medium">{(trafficOverview as any)?.forecast_percentage || 0}%</span>
                 </div>
                 <div className="mt-3 text-xs text-gray-600">
-                  Expectativa de aumento no congestionamento após às 17:00
+                  {(trafficOverview as any)?.forecast_message || 'N/A'}
                 </div>
               </div>
             </div>
-            
+
             <div className="mt-4">
               <Button variant="outline" size="sm" className="w-full">
                 Ver Análise Detalhada
@@ -285,35 +249,35 @@ const Traffic = () => {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-200">
-                  {trafficHotspots.map((hotspot) => (
-                    <tr key={hotspot.id} className="hover:bg-gray-50/50">
+                  {Object.entries(trafficHotspots || {}).map(([id, hotspot]) => (
+                    <tr key={id} className="hover:bg-gray-50/50">
                       <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm font-medium">{hotspot.location}</div>
+                        <div className="text-sm font-medium">{(hotspot as any).location}</div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
-                        <Badge 
-                          variant="outline" 
+                        <Badge
+                          variant="outline"
                           className={`
-                            ${hotspot.status === 'severe' ? 'bg-city-red-100 text-city-red-800 border-city-red-200' : ''}
-                            ${hotspot.status === 'moderate' ? 'bg-city-amber-100 text-city-amber-800 border-city-amber-200' : ''}
-                            ${hotspot.status === 'light' ? 'bg-city-amber-50 text-city-amber-600 border-city-amber-100' : ''}
-                            ${hotspot.status === 'clear' ? 'bg-city-green-100 text-city-green-800 border-city-green-200' : ''}
+                            ${(hotspot as any).status === 'severe' ? 'bg-city-red-100 text-city-red-800 border-city-red-200' : ''}
+                            ${(hotspot as any).status === 'moderate' ? 'bg-city-amber-100 text-city-amber-800 border-city-amber-200' : ''}
+                            ${(hotspot as any).status === 'light' ? 'bg-city-amber-50 text-city-amber-600 border-city-amber-100' : ''}
+                            ${(hotspot as any).status === 'clear' ? 'bg-city-green-100 text-city-green-800 border-city-green-200' : ''}
                           `}
                         >
-                          {hotspot.status === 'severe' && 'Severo'}
-                          {hotspot.status === 'moderate' && 'Moderado'}
-                          {hotspot.status === 'light' && 'Leve'}
-                          {hotspot.status === 'clear' && 'Fluido'}
+                          {(hotspot as any).status === 'severe' && 'Severo'}
+                          {(hotspot as any).status === 'moderate' && 'Moderado'}
+                          {(hotspot as any).status === 'light' && 'Leve'}
+                          {(hotspot as any).status === 'clear' && 'Fluido'}
                         </Badge>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm">{hotspot.flow} v/h</div>
+                        <div className="text-sm">{(hotspot as any).flow} v/h</div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm">{hotspot.avgSpeed} km/h</div>
+                        <div className="text-sm">{(hotspot as any).avgSpeed} km/h</div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm">{hotspot.waitTime}</div>
+                        <div className="text-sm">{(hotspot as any).waitTime}</div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-right text-sm">
                         <button className="text-city-teal-500 hover:text-city-teal-700">
@@ -332,32 +296,32 @@ const Traffic = () => {
         <div>
           <h2 className="text-lg font-semibold mb-4">Controle de Semáforos</h2>
           <div className="space-y-4">
-            {trafficControls.map((control) => (
+            {trafficDevices.map((control) => (
               <div key={control.id} className="glass-card rounded-xl p-4 border border-white/30">
                 <div className="flex items-start">
-                  <div className={`p-2 rounded-full ${control.status === 'online' ? 'bg-city-green-100 text-city-green-600' : 'bg-city-red-100 text-city-red-600'}`}>
+                  <div className={`p-2 rounded-full ${(control as any).status === 'ONLINE' ? 'bg-city-green-100 text-city-green-600' : 'bg-city-red-100 text-city-red-600'}`}>
                     <Car size={16} />
                   </div>
                   <div className="ml-3 flex-1">
                     <div className="flex items-center justify-between">
-                      <span className="text-sm font-medium">{control.crossroad}</span>
-                      <StatusIndicator 
-                        variant={control.status === 'online' ? 'online' : 'offline'} 
-                        animate={control.status === 'online'}
+                      <span className="text-sm font-medium">{(control as any).location?.description || control.id}</span> {/* Use location or id */}
+                      <StatusIndicator
+                        variant={(control as any).status === 'ONLINE' ? 'online' : 'offline'}
+                        animate={(control as any).status === 'ONLINE'}
                       >
-                        {control.status === 'online' ? 'Online' : 'Offline'}
+                        {(control as any).status || 'Desconhecido'}
                       </StatusIndicator>
                     </div>
                     <p className="text-sm text-gray-600 mt-1">
-                      Modo atual: <span className="font-medium">{control.mode === 'adaptive' ? 'Adaptativo' : 'Fixo'}</span>
+                      Modo atual: <span className="font-medium">{(control as any).mode || 'N/A'}</span> {/* Assuming mode is available */}
                     </p>
                   </div>
                 </div>
                 <div className="mt-3">
                   <div className="flex items-center justify-between mb-2">
                     <label className="text-xs text-gray-500">Modo de Operação</label>
-                    {control.status === 'online' && (
-                      <Select defaultValue={control.mode}>
+                    {(control as any).status === 'ONLINE' && (
+                      <Select defaultValue={(control as any).mode}>
                         <SelectTrigger className="w-32 h-7 text-xs">
                           <SelectValue placeholder="Selecionar modo" />
                         </SelectTrigger>
@@ -369,11 +333,11 @@ const Traffic = () => {
                       </Select>
                     )}
                   </div>
-                  <Button 
-                    variant="outline" 
-                    size="sm" 
+                  <Button
+                    variant="outline"
+                    size="sm"
                     className="w-full text-xs mt-2"
-                    disabled={control.status !== 'online'}
+                    disabled={(control as any).status !== 'ONLINE'}
                   >
                     Configurar Tempos
                   </Button>
@@ -392,3 +356,4 @@ const Traffic = () => {
 };
 
 export default Traffic;
+

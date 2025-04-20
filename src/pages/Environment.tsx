@@ -110,6 +110,8 @@ const environmentalZones = [
   },
 ];
 
+import { useFirebaseData } from "@/hooks/useFirebaseData";
+
 const airQualityLevels = [
   { label: "Boa", range: "0-50", description: "Qualidade do ar satisfatória, risco mínimo à saúde." },
   { label: "Moderada", range: "51-100", description: "Qualidade do ar aceitável, risco moderado para pessoas sensíveis." },
@@ -119,6 +121,37 @@ const airQualityLevels = [
 ];
 
 const Environment = () => {
+  const { data: airQualityData, loading: loadingAirQuality, error: errorAirQuality } = useFirebaseData("sensors/environment/airQuality");
+  const { data: temperatureData, loading: loadingTemperature, error: errorTemperature } = useFirebaseData("sensors/environment/temperature");
+  const { data: humidityData, loading: loadingHumidity, error: errorHumidity } = useFirebaseData("sensors/environment/humidity");
+  const { data: noiseData, loading: loadingNoise, error: errorNoise } = useFirebaseData("sensors/environment/noise");
+  const { data: environmentalZones, loading: loadingEnvironmentalZones, error: errorEnvironmentalZones } = useFirebaseData("sensors/environment/zones");
+  const { data: environmentStats, loading: loadingEnvironmentStats, error: errorEnvironmentStats } = useFirebaseData("stats/environment");
+  const { data: environmentOverview, loading: loadingEnvironmentOverview, error: errorEnvironmentOverview } = useFirebaseData("overview/environment");
+  const { data: deviceStatus, loading: loadingDeviceStatus, error: errorDeviceStatus } = useFirebaseData("device_status"); // To get active/inactive sensors
+
+  // Filter environmental devices from device status
+  const environmentalDevices = Object.entries(deviceStatus || {})
+    .map(([id, status]) => {
+      if (typeof status === 'object' && status !== null && (status as any).deviceType === 'environmental_sensor') { // Assuming deviceType 'environmental_sensor'
+        return { id, ...(status as any) };
+      }
+      return null;
+    })
+    .filter(device => device !== null);
+
+  const activeSensors = environmentalDevices.filter(device => device.status === 'ONLINE').length;
+  const inactiveSensors = environmentalDevices.length - activeSensors;
+
+
+  if (loadingAirQuality || loadingTemperature || loadingHumidity || loadingNoise || loadingEnvironmentalZones || loadingEnvironmentStats || loadingEnvironmentOverview || loadingDeviceStatus) {
+    return <DashboardLayout><div>Carregando dados ambientais...</div></DashboardLayout>;
+  }
+
+  if (errorAirQuality || errorTemperature || errorHumidity || errorNoise || errorEnvironmentalZones || errorEnvironmentStats || errorEnvironmentOverview || errorDeviceStatus) {
+    return <DashboardLayout><div>Erro ao carregar dados ambientais: {errorAirQuality?.message || errorTemperature?.message || errorHumidity?.message || errorNoise?.message || errorEnvironmentalZones?.message || errorEnvironmentStats?.message || errorEnvironmentOverview?.message || errorDeviceStatus?.message}</div></DashboardLayout>;
+  }
+
   return (
     <DashboardLayout>
       <div className="mb-6">
@@ -136,30 +169,30 @@ const Environment = () => {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-6">
         <StatsCard
           title="Sensores Ambientais"
-          value="125"
+          value={environmentalDevices.length.toString()}
           icon={<Leaf size={18} />}
           variant="green"
         />
         <StatsCard
           title="Qualidade do Ar (Média)"
-          value="52 AQI"
-          subtitle="Moderada"
+          value={`${(environmentStats as any)?.avg_aqi || 'N/A'} AQI`}
+          subtitle={(environmentStats as any)?.avg_air_quality_level || 'N/A'}
           icon={<Wind size={18} />}
-          variant="amber"
+          variant={(environmentStats as any)?.avg_air_quality_level === 'Boa' ? 'green' : (environmentStats as any)?.avg_air_quality_level === 'Moderada' ? 'amber' : 'red'} // Assuming levels map to variants
         />
         <StatsCard
           title="Temperatura Média"
-          value="24°C"
-          trend={{ value: 1.2, positive: true }}
+          value={`${(environmentStats as any)?.avg_temperature || 'N/A'}°C`}
+          trend={(environmentStats as any)?.temperature_trend}
           icon={<Thermometer size={18} />}
-          variant="red"
+          variant="red" // Assuming temperature trend doesn't dictate color
         />
         <StatsCard
           title="Umidade Média"
-          value="62%"
-          trend={{ value: 2.5, positive: false }}
+          value={`${(environmentStats as any)?.avg_humidity || 'N/A'}%`}
+          trend={(environmentStats as any)?.humidity_trend}
           icon={<DropletIcon size={18} />}
-          variant="blue"
+          variant="blue" // Assuming humidity trend doesn't dictate color
         />
       </div>
 
@@ -169,8 +202,8 @@ const Environment = () => {
           <div className="mb-4 flex items-center justify-between">
             <h2 className="text-lg font-semibold">Mapa Ambiental</h2>
             <div className="flex items-center gap-2">
-              <StatusIndicator variant="online">Sensores Ativos (118)</StatusIndicator>
-              <StatusIndicator variant="offline">Inativos (7)</StatusIndicator>
+              <StatusIndicator variant="online">Sensores Ativos ({activeSensors})</StatusIndicator>
+              <StatusIndicator variant="offline">Inativos ({inactiveSensors})</StatusIndicator>
             </div>
           </div>
           <Map height="400px" deviceTypes={["environmental"]} />
@@ -181,36 +214,41 @@ const Environment = () => {
             <div className="mb-4">
               <div className="flex items-center justify-between">
                 <h3 className="font-medium">Média da Cidade</h3>
-                <div className="py-1 px-2 rounded-full bg-city-amber-100 text-city-amber-800 text-xs font-medium">
-                  Moderada
+                <div className={`py-1 px-2 rounded-full text-xs font-medium
+                  ${(environmentOverview as any)?.avg_air_quality_level === 'Boa' ? 'bg-city-green-100 text-city-green-800' :
+                    (environmentOverview as any)?.avg_air_quality_level === 'Moderada' ? 'bg-city-amber-100 text-city-amber-800' :
+                    'bg-city-red-100 text-city-red-800'}
+                `}>
+                  {(environmentOverview as any)?.avg_air_quality_level || 'N/A'}
                 </div>
               </div>
               <div className="mt-2 flex items-center gap-3">
-                <div className="text-3xl font-bold">52</div>
+                <div className="text-3xl font-bold">{(environmentOverview as any)?.avg_aqi || 'N/A'}</div>
                 <div className="text-sm text-gray-500">Índice de Qualidade do Ar</div>
               </div>
-              
+
               <div className="mt-3 h-2 w-full bg-gray-200 rounded-full overflow-hidden">
                 <div
                   className="h-full bg-gradient-to-r from-green-500 via-yellow-400 to-red-500"
-                  style={{ width: "52%" }}
+                  style={{ width: `${(environmentOverview as any)?.avg_aqi || 0}%` }} // Assuming AQI is 0-100
                 ></div>
               </div>
             </div>
-            
+
             <div className="flex-1">
               <h3 className="text-sm font-medium mb-2">Níveis de Qualidade do Ar</h3>
               <div className="space-y-3">
+                {/* Assuming airQualityLevels is still needed for descriptions */}
                 {airQualityLevels.map((level, index) => (
                   <div key={index} className="flex p-2 rounded-lg hover:bg-white/50 transition-colors">
-                    <div className="w-1 mr-2 self-stretch rounded-full" 
-                      style={{ 
-                        backgroundColor: 
-                          index === 0 ? "#22c55e" : 
-                          index === 1 ? "#eab308" : 
-                          index === 2 ? "#f97316" : 
-                          index === 3 ? "#ef4444" : 
-                          "#7f1d1d" 
+                    <div className="w-1 mr-2 self-stretch rounded-full"
+                      style={{
+                        backgroundColor:
+                          index === 0 ? "#22c55e" :
+                          index === 1 ? "#eab308" :
+                          index === 2 ? "#f97316" :
+                          index === 3 ? "#ef4444" :
+                          "#7f1d1d"
                       }}
                     ></div>
                     <div>
@@ -224,7 +262,7 @@ const Environment = () => {
                 ))}
               </div>
             </div>
-            
+
             <div className="mt-3">
               <Button variant="outline" size="sm" className="w-full">
                 <BarChart3 size={14} className="mr-1" />
@@ -247,50 +285,50 @@ const Environment = () => {
               <TabsTrigger value="noise">Ruído</TabsTrigger>
             </TabsList>
           </div>
-          
+
           <TabsContent value="air-quality" className="mt-0">
             <ChartCard
               title="Qualidade do Ar (Hoje)"
               description="Índice AQI durante o dia"
               data={airQualityData}
               type="line"
-              dataKeys={["aqi"]}
+              dataKeys={["aqi"]} // Assuming data structure has 'aqi'
               colors={["#00B359"]}
               yAxisFormatter={(value) => `${value}`}
             />
           </TabsContent>
-          
+
           <TabsContent value="temperature" className="mt-0">
             <ChartCard
               title="Temperatura (Hoje)"
               description="°C durante o dia"
               data={temperatureData}
               type="line"
-              dataKeys={["temp"]}
+              dataKeys={["temp"]} // Assuming data structure has 'temp'
               colors={["#E50D00"]}
               yAxisFormatter={(value) => `${value}°C`}
             />
           </TabsContent>
-          
+
           <TabsContent value="humidity" className="mt-0">
             <ChartCard
               title="Umidade (Hoje)"
               description="% durante o dia"
               data={humidityData}
               type="line"
-              dataKeys={["humidity"]}
+              dataKeys={["humidity"]} // Assuming data structure has 'humidity'
               colors={["#0064FF"]}
               yAxisFormatter={(value) => `${value}%`}
             />
           </TabsContent>
-          
+
           <TabsContent value="noise" className="mt-0">
             <ChartCard
               title="Nível de Ruído (Hoje)"
               description="dB durante o dia"
               data={noiseData}
               type="line"
-              dataKeys={["noise"]}
+              dataKeys={["noise"]} // Assuming data structure has 'noise'
               colors={["#FFC000"]}
               yAxisFormatter={(value) => `${value} dB`}
             />
@@ -330,34 +368,34 @@ const Environment = () => {
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-200">
-                {environmentalZones.map((zone) => (
-                  <tr key={zone.id} className="hover:bg-gray-50/50">
+                {Object.entries(environmentalZones || {}).map(([id, zone]) => (
+                  <tr key={id} className="hover:bg-gray-50/50">
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm font-medium">{zone.name}</div>
+                      <div className="text-sm font-medium">{(zone as any).name || (zone as any).location?.description || id}</div> {/* Use name, location, or id */}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <Badge 
-                        variant="outline" 
+                      <Badge
+                        variant="outline"
                         className={`
-                          ${zone.airQuality === 'Boa' ? 'bg-city-green-100 text-city-green-800 border-city-green-200' : ''}
-                          ${zone.airQuality === 'Moderada' ? 'bg-city-amber-100 text-city-amber-800 border-city-amber-200' : ''}
-                          ${zone.airQuality === 'Ruim' ? 'bg-city-red-100 text-city-red-800 border-city-red-200' : ''}
+                          ${(zone as any).airQuality === 'Boa' ? 'bg-city-green-100 text-city-green-800 border-city-green-200' : ''}
+                          ${(zone as any).airQuality === 'Moderada' ? 'bg-city-amber-100 text-city-amber-800 border-city-amber-200' : ''}
+                          ${(zone as any).airQuality === 'Ruim' ? 'bg-city-red-100 text-city-red-800 border-city-red-200' : ''}
                         `}
                       >
-                        {zone.airQuality}
+                        {(zone as any).airQuality || 'N/A'}
                       </Badge>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm">{zone.aqi}</div>
+                      <div className="text-sm">{(zone as any).aqi || 'N/A'}</div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm">{zone.temp}°C</div>
+                      <div className="text-sm">{(zone as any).temp || 'N/A'}°C</div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm">{zone.humidity}%</div>
+                      <div className="text-sm">{(zone as any).humidity || 'N/A'}%</div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm">{zone.noise} dB</div>
+                      <div className="text-sm">{(zone as any).noise || 'N/A'} dB</div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-right text-sm">
                       <button className="text-city-green-600 hover:text-city-green-800">
