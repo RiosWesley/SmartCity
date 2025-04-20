@@ -38,13 +38,19 @@ A arquitetura do sistema é dividida em três camadas principais:
 1.  **Implementar a integração completa com o Firebase no Frontend React:** **(Prioridade Máxima)**
     *   [ ] Adicionar o SDK do Firebase ao projeto React: `npm install firebase` ou `bun add firebase`.
     *   [ ] Configurar um projeto no Firebase Console e obter as credenciais de configuração (API Key, Auth Domain, Database URL, etc.).
-    *   [ ] Criar um arquivo de configuração Firebase (e.g., `src/lib/firebase-config.ts`) no projeto React com as credenciais obtidas (garantir que este arquivo seja adicionado ao `.gitignore` se contiver informações sensíveis).
-    *   [ ] Inicializar o Firebase no ponto de entrada principal da aplicação React (`src/main.tsx` ou `src/App.tsx`).
-    *   [ ] Configurar a autenticação de usuários no frontend (Firebase Authentication), se necessário para proteger o acesso ao dashboard.
-    *   [ ] Definir a estrutura de dados (schema) no Firebase Realtime Database (e.g., `/devices`, `/sensors/lighting`, `/sensors/traffic`, `/commands`).
-    *   [ ] Criar hooks React personalizados (e.g., `src/hooks/useFirebaseData.ts`, `src/hooks/useSendCommand.ts`) para encapsular a lógica de acesso ao Firebase Realtime Database.
-    *   [ ] Implementar hooks React para leitura de dados em tempo real do Firebase Realtime Database, utilizando `onValue` ou APIs similares do Firebase SDK.
-    *   [ ] Substituir os dados mockados nos componentes React (em `src/pages` e `src/components`) pelos dados reais provenientes dos hooks do Firebase.
+    *   [x] Criar um arquivo de configuração Firebase (e.g., `src/lib/firebase-config.ts`) no projeto React com as credenciais obtidas (garantir que este arquivo seja adicionado ao `.gitignore` se contiver informações sensíveis).
+    *   [x] Inicializar o Firebase no ponto de entrada principal da aplicação React (`src/main.tsx` ou `src/App.tsx`).
+    *   [x] Configurar a autenticação de usuários no frontend (Firebase Authentication), se necessário para proteger o acesso ao dashboard.
+    *   [x] Definir a estrutura de dados (schema) no Firebase Realtime Database (e.g., `/devices`, `/sensors/lighting`, `/sensors/traffic`, `/commands`).
+    *   [x] Criar hooks React personalizados (e.g., `src/hooks/useFirebaseData.ts`, `src/hooks/useSendCommand.ts`) para encapsular a lógica de acesso ao Firebase Realtime Database.
+    *   [x] Implementar hooks React para leitura de dados em tempo real do Firebase Realtime Database, utilizando `onValue` ou APIs similares do Firebase SDK.
+    *   [x] Substituir dados mockados na página Dashboard (`src/pages/Index.tsx`).
+    *   [ ] Substituir dados mockados na página Iluminação (`src/pages/Lighting.tsx`).
+    *   [ ] Substituir dados mockados na página Tráfego (`src/pages/Traffic.tsx`).
+    *   [ ] Substituir dados mockados na página Ambiente (`src/pages/Environment.tsx`).
+    *   [ ] Substituir dados mockados na página Alertas (`src/pages/Alerts.tsx`).
+    *   [ ] Substituir dados mockados na página Relatórios (`src/pages/Reports.tsx`).
+    *   [ ] Substituir dados mockados na página Configurações (`src/pages/Settings.tsx`).
     *   [ ] Implementar a funcionalidade de envio de comandos do frontend para os dispositivos ESP32 através da escrita de dados em um nó específico do Firebase Realtime Database (e.g., `/commands/[deviceId]`).
 
 2.  **Desenvolver o firmware para os dispositivos ESP32 (Após configuração do Firebase):**

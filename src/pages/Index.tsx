@@ -1,4 +1,4 @@
-
+import useFirebaseData from "@/hooks/useFirebaseData";
 import React from "react";
 import { motion } from "framer-motion";
 import DashboardLayout from "@/layout/DashboardLayout";
@@ -83,6 +83,68 @@ const alertsData = [
 ];
 
 const Index = () => {
+  const { data: alertsDataFirebase, loading: alertsLoading, error: alertsError } = useFirebaseData('/alerts');
+  const { data: deviceStatusDataFirebase, loading: deviceStatusLoading, error: deviceStatusError } = useFirebaseData('/device_status');
+  const { data: lightingStatusDataFirebase, loading: lightingStatusLoading, error: lightingStatusError } = useFirebaseData('/lighting_status');
+  const { data: trafficSensorsDataFirebase, loading: trafficSensorsLoading, error: trafficSensorsError } = useFirebaseData('/traffic_sensors');
+  const { data: environmentalSensorsDataFirebase, loading: environmentalSensorsLoading, error: environmentalSensorsError } = useFirebaseData('/environmental_sensors');
+
+
+  // Convert alerts object to array for mapping
+  const alerts = alertsDataFirebase ? Object.keys(alertsDataFirebase).map(key => ({
+    id: key, // Use Firebase key as ID
+    ...alertsDataFirebase[key]
+  })) : [];
+
+  // Calculate device counts
+  const totalDevices = deviceStatusDataFirebase ? Object.keys(deviceStatusDataFirebase).length : 0;
+  const onlineDevices = deviceStatusDataFirebase ? Object.values(deviceStatusDataFirebase).filter((device: any) => device.status === 'ONLINE').length : 0;
+  const offlineDevices = totalDevices - onlineDevices;
+
+  // Calculate lighting stats
+  const totalLightingDevices = deviceStatusDataFirebase ? Object.values(deviceStatusDataFirebase).filter((device: any) => device.deviceType === 'lighting').length : 0;
+  const lightsOn = lightingStatusDataFirebase ? Object.values(lightingStatusDataFirebase).filter((light: any) => light.status === true).length : 0;
+  const lightsOnPercentage = totalLightingDevices > 0 ? ((lightsOn / totalLightingDevices) * 100).toFixed(0) : 0;
+
+
+  // Calculate traffic stats
+  const totalTrafficSensors = deviceStatusDataFirebase ? Object.values(deviceStatusDataFirebase).filter((device: any) => device.deviceType === 'traffic_sensor').length : 0;
+  const monitoredRoads = trafficSensorsDataFirebase ? Object.keys(trafficSensorsDataFirebase).length : 0;
+  // Simple aggregation for traffic flow (can be improved)
+  const trafficFlows = trafficSensorsDataFirebase ? Object.values(trafficSensorsDataFirebase).map((sensor: any) => sensor.traffic_flow?.flow_intensity).filter(Boolean) : [];
+  const trafficFlowSummary = trafficFlows.length > 0 ? trafficFlows.reduce((acc: any, flow: string) => {
+    acc[flow] = (acc[flow] || 0) + 1;
+    return acc;
+  }, {}) : {};
+  const dominantTrafficFlow = Object.keys(trafficFlowSummary).sort((a, b) => trafficFlowSummary[b] - trafficFlowSummary[a])[0] || 'N/A';
+
+
+  // Calculate environmental stats
+  const totalEnvironmentalSensors = deviceStatusDataFirebase ? Object.values(deviceStatusDataFirebase).filter((device: any) => device.deviceType === 'environmental_sensor').length : 0;
+  const airQualityLevels = environmentalSensorsDataFirebase ? Object.values(environmentalSensorsDataFirebase).map((sensor: any) => sensor.readings?.air_quality?.general_aqi_level).filter(Boolean) : [];
+  const airQualitySummary = airQualityLevels.length > 0 ? airQualityLevels.reduce((acc: any, level: string) => {
+    acc[level] = (acc[level] || 0) + 1;
+    return acc;
+  }, {}) : {};
+  const dominantAirQuality = Object.keys(airQualitySummary).sort((a, b) => airQualitySummary[b] - airQualitySummary[a])[0] || 'N/A';
+
+  const temperatures = environmentalSensorsDataFirebase ? Object.values(environmentalSensorsDataFirebase).map((sensor: any) => sensor.readings?.temperature?.celsius).filter(value => value !== undefined) : [];
+  const averageTemperature = temperatures.length > 0 ? (temperatures.reduce((sum, temp) => sum + temp, 0) / temperatures.length).toFixed(1) : 'N/A';
+
+  const humidities = environmentalSensorsDataFirebase ? Object.values(environmentalSensorsDataFirebase).map((sensor: any) => sensor.readings?.humidity?.percentage).filter(value => value !== undefined) : [];
+  const averageHumidity = humidities.length > 0 ? (humidities.reduce((sum, humidity) => sum + humidity, 0) / humidities.length).toFixed(1) : 'N/A';
+
+
+  // Handle loading and error states for all data
+  if (alertsLoading || deviceStatusLoading || lightingStatusLoading || trafficSensorsLoading || environmentalSensorsLoading) {
+    return <DashboardLayout><div>Carregando dados do Firebase...</div></DashboardLayout>;
+  }
+
+  if (alertsError || deviceStatusError || lightingStatusError || trafficSensorsError || environmentalSensorsError) {
+    return <DashboardLayout><div>Erro ao carregar dados do Firebase: {alertsError?.message || deviceStatusError?.message || lightingStatusError?.message || trafficSensorsError?.message || environmentalSensorsError?.message}</div></DashboardLayout>;
+  }
+
+
   return (
     <DashboardLayout>
       <div className="mb-6">
@@ -100,28 +162,28 @@ const Index = () => {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-6">
         <StatsCard
           title="Total de Dispositivos"
-          value="538"
-          trend={{ value: 5.2, positive: true }}
+          value={totalDevices.toString()}
+          trend={{ value: 5.2, positive: true }} // Keep mock trend for now
           icon={<Signal size={18} />}
         />
         <StatsCard
           title="Dispositivos Online"
-          value="510"
-          trend={{ value: 2.8, positive: true }}
+          value={onlineDevices.toString()}
+          trend={{ value: 2.8, positive: true }} // Keep mock trend for now
           variant="green"
           icon={<Wifi size={18} />}
         />
         <StatsCard
           title="Alertas Ativos"
-          value="8"
-          trend={{ value: 1.5, positive: false }}
+          value={alerts.length.toString()}
+          trend={{ value: 1.5, positive: false }} // Keep mock trend for now
           variant="amber"
           icon={<AlertCircle size={18} />}
         />
         <StatsCard
           title="Consumo de Energia"
-          value="1240 kWh"
-          trend={{ value: 3.2, positive: false }}
+          value="1240 kWh" // Keep mock value for now
+          trend={{ value: 3.2, positive: false }} // Keep mock trend for now
           variant="blue"
           icon={<Lightbulb size={18} />}
         />
@@ -134,10 +196,11 @@ const Index = () => {
             <div className="flex items-center justify-between mb-3">
               <h2 className="text-lg font-semibold">Mapa da Cidade</h2>
               <div className="flex items-center gap-2">
-                <StatusIndicator variant="online">Online (510)</StatusIndicator>
-                <StatusIndicator variant="offline">Offline (28)</StatusIndicator>
+                <StatusIndicator variant="online">{`Online (${onlineDevices})`}</StatusIndicator>
+                <StatusIndicator variant="offline">{`Offline (${offlineDevices})`}</StatusIndicator>
               </div>
             </div>
+            {/* Map component will need to be updated to use real location data */}
             <Map height="400px" />
           </div>
         </div>
@@ -150,14 +213,14 @@ const Index = () => {
             </button>
           </div>
           <div className="space-y-4">
-            {alertsData.map((alert) => (
+            {alerts.map((alert) => (
               <AlertCard
                 key={alert.id}
                 title={alert.title}
-                message={alert.message}
-                timestamp={alert.timestamp}
-                location={alert.location}
-                severity={alert.severity as any}
+                message={alert.description || alert.message} // Use description from Firebase if available
+                timestamp={new Date(alert.creationTimestamp).toLocaleString()} // Format timestamp
+                location={alert.location?.description || 'N/A'} // Use location description
+                severity={alert.severity.toLowerCase() as any} // Ensure severity is lowercase
                 onView={() => console.log("View alert", alert.id)}
               />
             ))}
@@ -167,10 +230,11 @@ const Index = () => {
 
       {/* Charts */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+        {/* Charts still use mock data - need to implement data processing */}
         <ChartCard
           title="Dispositivos por Tempo"
           description="Crescimento mensal da rede"
-          data={deviceStats}
+          data={deviceStats} // Keep mock data for now
           type="area"
           dataKeys={["value"]}
           colors={["#0064FF"]}
@@ -178,7 +242,7 @@ const Index = () => {
         <ChartCard
           title="Status dos Dispositivos"
           description="Dispositivos online vs offline"
-          data={deviceStatusData}
+          data={deviceStatusData} // Keep mock data for now
           type="bar"
           dataKeys={["online", "offline"]}
           colors={["#00E673", "#FF6E65"]}
@@ -197,20 +261,20 @@ const Index = () => {
                 </div>
                 <h3 className="font-medium">Iluminação</h3>
               </div>
-              <StatusIndicator variant="online">215 dispositivos</StatusIndicator>
+              <StatusIndicator variant="online">{`${totalLightingDevices} dispositivos`}</StatusIndicator>
             </div>
             <div className="space-y-2">
               <div className="flex justify-between text-sm">
                 <span className="text-gray-500">Consumo atual</span>
-                <span>1240 kWh</span>
+                <span>1240 kWh</span> {/* Keep mock data */}
               </div>
               <div className="flex justify-between text-sm">
                 <span className="text-gray-500">Luzes ligadas</span>
-                <span>178 (83%)</span>
+                <span>{`${lightsOn} (${lightsOnPercentage}%)`}</span>
               </div>
               <div className="flex justify-between text-sm">
                 <span className="text-gray-500">Economia mensal</span>
-                <span className="text-city-green-500">12%</span>
+                <span className="text-city-green-500">12%</span> {/* Keep mock data */}
               </div>
             </div>
             <button className="w-full mt-4 py-2 text-sm text-city-blue-500 hover:text-city-blue-600 hover:bg-city-blue-50 rounded-lg transition-colors flex items-center justify-center">
@@ -227,20 +291,20 @@ const Index = () => {
                 </div>
                 <h3 className="font-medium">Tráfego</h3>
               </div>
-              <StatusIndicator variant="online">198 dispositivos</StatusIndicator>
+              <StatusIndicator variant="online">{`${totalTrafficSensors} dispositivos`}</StatusIndicator>
             </div>
             <div className="space-y-2">
               <div className="flex justify-between text-sm">
                 <span className="text-gray-500">Vias monitoradas</span>
-                <span>85</span>
+                <span>{monitoredRoads}</span>
               </div>
               <div className="flex justify-between text-sm">
                 <span className="text-gray-500">Fluxo atual</span>
-                <span>Moderado</span>
+                <span>{dominantTrafficFlow}</span>
               </div>
               <div className="flex justify-between text-sm">
                 <span className="text-gray-500">Tempo médio</span>
-                <span>18 min</span>
+                <span>18 min</span> {/* Keep mock data */}
               </div>
             </div>
             <button className="w-full mt-4 py-2 text-sm text-city-teal-500 hover:text-city-teal-600 hover:bg-city-teal-50 rounded-lg transition-colors flex items-center justify-center">
@@ -257,20 +321,21 @@ const Index = () => {
                 </div>
                 <h3 className="font-medium">Ambiente</h3>
               </div>
-              <StatusIndicator variant="warning">125 dispositivos</StatusIndicator>
+              {/* Status indicator variant based on dominant air quality? */}
+              <StatusIndicator variant={dominantAirQuality === 'GOOD' ? 'online' : dominantAirQuality === 'MODERATE' ? 'warning' : 'offline'}>{`${totalEnvironmentalSensors} dispositivos`}</StatusIndicator>
             </div>
             <div className="space-y-2">
               <div className="flex justify-between text-sm">
                 <span className="text-gray-500">Qualidade do ar</span>
-                <span>Boa (AQI 52)</span>
+                <span>{`${dominantAirQuality} ${dominantAirQuality !== 'N/A' ? '(Estimado)' : ''}`}</span> {/* Indicate estimated */}
               </div>
               <div className="flex justify-between text-sm">
                 <span className="text-gray-500">Temperatura média</span>
-                <span>24°C</span>
+                <span>{`${averageTemperature}°C`}</span>
               </div>
               <div className="flex justify-between text-sm">
                 <span className="text-gray-500">Umidade</span>
-                <span>65%</span>
+                <span>{`${averageHumidity}%`}</span>
               </div>
             </div>
             <button className="w-full mt-4 py-2 text-sm text-city-green-500 hover:text-city-green-600 hover:bg-city-green-50 rounded-lg transition-colors flex items-center justify-center">

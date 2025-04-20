@@ -1,4 +1,3 @@
-
 import React from "react";
 import { motion } from "framer-motion";
 import DashboardLayout from "@/layout/DashboardLayout";
@@ -6,48 +5,71 @@ import { StatsCard } from "@/components/StatsCard";
 import { ChartCard } from "@/components/ChartCard";
 import Map from "@/components/Map";
 import { StatusIndicator } from "@/components/StatusIndicator";
+import { useFirebaseData } from "@/hooks/useFirebaseData";
 import { Lightbulb, Power, Clock, BarChart3, Settings, MailWarning } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { Button } from "@/components/ui/button";
 
-// Mock data for lighting page
-const energyConsumptionData = [
-  { name: "00:00", consumption: 320 },
-  { name: "04:00", consumption: 280 },
-  { name: "08:00", consumption: 180 },
-  { name: "12:00", consumption: 60 },
-  { name: "16:00", consumption: 50 },
-  { name: "20:00", consumption: 340 },
-  { name: "24:00", consumption: 330 },
-];
-
-const monthlyConsumptionData = [
-  { name: "Jan", consumption: 8240 },
-  { name: "Fev", consumption: 7850 },
-  { name: "Mar", consumption: 8120 },
-  { name: "Abr", consumption: 7940 },
-  { name: "Mai", consumption: 7430 },
-  { name: "Jun", consumption: 6980 },
-  { name: "Jul", consumption: 7240 },
-];
-
-const lightZones = [
-  { id: 1, name: "Zona Central", devices: 78, status: "on", brightness: 80, schedule: "18:00 - 06:00" },
-  { id: 2, name: "Zona Norte", devices: 45, status: "on", brightness: 70, schedule: "18:30 - 05:30" },
-  { id: 3, name: "Zona Sul", devices: 52, status: "on", brightness: 80, schedule: "18:15 - 05:45" },
-  { id: 4, name: "Zona Leste", devices: 64, status: "on", brightness: 75, schedule: "18:45 - 05:15" },
-  { id: 5, name: "Zona Oeste", devices: 38, status: "off", brightness: 0, schedule: "19:00 - 05:00" },
-];
-
-const lightingDeviceIssues = [
-  { id: 1, deviceId: "LT-2389", issue: "Sem resposta", location: "Av. Paulista, 1500", since: "2h 15m" },
-  { id: 2, deviceId: "LT-4501", issue: "Baixa voltagem", location: "R. Augusta, 300", since: "48m" },
-  { id: 3, deviceId: "LT-1276", issue: "Falha no sensor", location: "Pq. Ibirapuera", since: "1h 30m" },
-];
 
 const Lighting = () => {
+  const { data: lightingStatus, loading: loadingLightingStatus, error: errorLightingStatus } = useFirebaseData("lighting_status");
+  const { data: deviceStatus, loading: loadingDeviceStatus, error: errorDeviceStatus } = useFirebaseData("device_status");
+
+  // Process data for stats and table
+  const lightingDevices = Object.entries(lightingStatus || {})
+    .map(([id, status]) => {
+      // Ensure status is an object before spreading
+      if (typeof status === 'object' && status !== null) {
+        // Explicitly cast status to an object type if needed, or ensure the type of lightingStatus is correct
+        return { id, ...(status as any) }; // Using 'any' as a temporary workaround if type inference is the issue
+      }
+      return null; // Or handle appropriately if status is not an object
+    })
+    .filter(device => device !== null && deviceStatus?.[device.id]?.deviceType === 'lighting');
+
+  const totalDevices = lightingDevices.length;
+  const connectedDevices = lightingDevices.filter(device => deviceStatus?.[device.id]?.status === 'ONLINE').length;
+  const devicesWithIssues = lightingDevices.filter(device => device.error_code !== null || deviceStatus?.[device.id]?.sysErr !== null).length;
+  const devicesOn = lightingDevices.filter(device => device.status === true).length;
+  const devicesOff = totalDevices - devicesOn;
+
+  // Mock data for lighting page
+  const energyConsumptionData = [
+    { name: "00:00", consumption: 320 },
+    { name: "04:00", consumption: 280 },
+    { name: "08:00", consumption: 180 },
+    { name: "12:00", consumption: 60 },
+    { name: "16:00", consumption: 50 },
+    { name: "20:00", consumption: 340 },
+    { name: "24:00", consumption: 330 },
+  ];
+
+  const monthlyConsumptionData = [
+    { name: "Jan", consumption: 8240 },
+    { name: "Fev", consumption: 7850 },
+    { name: "Mar", consumption: 8120 },
+    { name: "Abr", consumption: 7940 },
+    { name: "Mai", consumption: 7430 },
+    { name: "Jun", consumption: 6980 },
+    { name: "Jul", consumption: 7240 },
+  ];
+
+  const lightingDeviceIssues = [
+    { id: 1, deviceId: "LT-2389", issue: "Sem resposta", location: "Av. Paulista, 1500", since: "2h 15m" },
+    { id: 2, deviceId: "LT-4501", issue: "Baixa voltagem", location: "R. Augusta, 300", since: "48m" },
+    { id: 3, deviceId: "LT-1276", issue: "Falha no sensor", location: "Pq. Ibirapuera", since: "1h 30m" },
+  ];
+
+  if (loadingLightingStatus || loadingDeviceStatus) {
+    return <DashboardLayout><div>Carregando dados de iluminação...</div></DashboardLayout>;
+  }
+
+  if (errorLightingStatus || errorDeviceStatus) {
+    return <DashboardLayout><div>Erro ao carregar dados de iluminação: {errorLightingStatus?.message || errorDeviceStatus?.message}</div></DashboardLayout>;
+  }
+
   return (
     <DashboardLayout>
       <div className="mb-6">
@@ -65,27 +87,27 @@ const Lighting = () => {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-6">
         <StatsCard
           title="Total de Luminárias"
-          value="215"
+          value={totalDevices.toString()}
           icon={<Lightbulb size={18} />}
           variant="blue"
         />
         <StatsCard
           title="Luminárias Ligadas"
-          value="178"
-          subtitle="83% do total"
+          value={devicesOn.toString()}
+          subtitle={`${((devicesOn / totalDevices) * 100).toFixed(0)}% do total`}
           icon={<Power size={18} />}
           variant="green"
         />
         <StatsCard
           title="Consumo Atual"
-          value="1240 kWh"
-          trend={{ value: 3.2, positive: false }}
+          value="1240 kWh" // Keep mock data for now
+          trend={{ value: 3.2, positive: false }} // Keep mock data for now
           icon={<BarChart3 size={18} />}
         />
         <StatsCard
           title="Dispositivos com Falha"
-          value="3"
-          trend={{ value: 1, positive: true }}
+          value={devicesWithIssues.toString()}
+          trend={{ value: 1, positive: true }} // Keep mock data for now
           icon={<MailWarning size={18} />}
           variant="amber"
         />
@@ -97,8 +119,8 @@ const Lighting = () => {
           <div className="mb-4 flex items-center justify-between">
             <h2 className="text-lg font-semibold">Mapa de Iluminação</h2>
             <div className="flex items-center gap-2">
-              <StatusIndicator variant="online">Ligadas (178)</StatusIndicator>
-              <StatusIndicator variant="offline">Desligadas (37)</StatusIndicator>
+              <StatusIndicator variant="online">Ligadas ({devicesOn})</StatusIndicator>
+              <StatusIndicator variant="offline">Desligadas ({devicesOff})</StatusIndicator>
             </div>
           </div>
           <Map height="400px" deviceTypes={["lighting"]} />
@@ -113,7 +135,7 @@ const Lighting = () => {
                   <Lightbulb size={18} className="mr-2 text-city-amber-400" />
                   Todas as Luminárias
                 </span>
-                <Switch defaultChecked />
+                <Switch defaultChecked /> {/* Keep mock functionality for now */}
               </div>
             </div>
             
@@ -129,7 +151,7 @@ const Lighting = () => {
                   type="range"
                   min="0"
                   max="100"
-                  defaultValue="75"
+                  defaultValue="75" // Keep mock functionality for now
                   className="w-full h-2 bg-city-blue-100 rounded-lg appearance-none cursor-pointer"
                 />
               </div>
@@ -144,7 +166,7 @@ const Lighting = () => {
                     <Clock size={14} className="text-gray-500" />
                     <input
                       type="time"
-                      defaultValue="18:00"
+                      defaultValue="18:00" // Keep mock functionality for now
                       className="p-1.5 text-sm bg-white/50 border border-gray-200 rounded-md w-full"
                     />
                   </div>
@@ -155,7 +177,7 @@ const Lighting = () => {
                     <Clock size={14} className="text-gray-500" />
                     <input
                       type="time"
-                      defaultValue="06:00"
+                      defaultValue="06:00" // Keep mock functionality for now
                       className="p-1.5 text-sm bg-white/50 border border-gray-200 rounded-md w-full"
                     />
                   </div>
@@ -164,7 +186,7 @@ const Lighting = () => {
             </div>
             
             <div className="flex justify-end">
-              <Button size="sm">Aplicar Configurações</Button>
+              <Button size="sm">Aplicar Configurações</Button> {/* Keep mock functionality for now */}
             </div>
           </Card>
         </div>
@@ -196,26 +218,32 @@ const Lighting = () => {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Zones */}
         <div className="lg:col-span-2">
-          <h2 className="text-lg font-semibold mb-4">Zonas de Iluminação</h2>
+          <h2 className="text-lg font-semibold mb-4">Dispositivos de Iluminação</h2>
           <div className="overflow-hidden rounded-xl glass-card border border-white/20">
             <div className="overflow-x-auto">
               <table className="w-full">
                 <thead>
                   <tr className="bg-gray-50/50 border-b border-gray-200">
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Zona
+                      ID do Dispositivo
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Dispositivos
+                      Status (Iluminação)
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Status
+                      Status (Dispositivo)
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Brilho
+                      Luminosidade Reportada
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Programação
+                      Última Atualização
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Localização
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Código de Erro
                     </th>
                     <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Ações
@@ -223,24 +251,32 @@ const Lighting = () => {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-200">
-                  {lightZones.map((zone) => (
-                    <tr key={zone.id} className="hover:bg-gray-50/50">
+                  {lightingDevices.map((device) => (
+                    <tr key={device.id} className="hover:bg-gray-50/50">
                       <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm font-medium">{zone.name}</div>
+                        <div className="text-sm font-medium">{device.id}</div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm">{zone.devices}</div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <Badge variant={zone.status === "on" ? "success" : "outline"} className={zone.status === "on" ? "bg-city-green-100 text-city-green-800 hover:bg-city-green-100" : ""}>
-                          {zone.status === "on" ? "Ligado" : "Desligado"}
+                        <Badge variant={device.status ? "default" : "outline"}>
+                          {device.status ? "Ligado" : "Desligado"}
                         </Badge>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm">{zone.brightness}%</div>
+                        <Badge variant={deviceStatus?.[device.id]?.status === 'ONLINE' ? "default" : "destructive"}>
+                           {deviceStatus?.[device.id]?.status || 'Desconhecido'}
+                         </Badge>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm">{zone.schedule}</div>
+                        <div className="text-sm">{device.reported_luminosity || 'N/A'}</div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="text-sm">{device.last_update_timestamp ? new Date(device.last_update_timestamp).toLocaleString() : 'N/A'}</div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="text-sm">{device.location?.description || 'N/A'}</div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="text-sm">{device.error_code || deviceStatus?.[device.id]?.sysErr || 'Nenhum'}</div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-right text-sm">
                         <button className="text-city-blue-500 hover:text-city-blue-700 mr-3">
@@ -262,7 +298,7 @@ const Lighting = () => {
         <div>
           <h2 className="text-lg font-semibold mb-4">Dispositivos com Problemas</h2>
           <div className="space-y-4">
-            {lightingDeviceIssues.map((issue) => (
+            {lightingDeviceIssues.map((issue) => ( // Keep mock data for now
               <div key={issue.id} className="glass-card rounded-xl p-4 border border-city-amber-200">
                 <div className="flex items-start">
                   <div className="p-2 rounded-full bg-city-amber-100 text-city-amber-600">
