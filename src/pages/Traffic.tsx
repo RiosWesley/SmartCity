@@ -1,4 +1,3 @@
-
 import React from "react";
 import { motion } from "framer-motion";
 import DashboardLayout from "@/layout/DashboardLayout";
@@ -21,31 +20,126 @@ import {
 import { useFirebaseData } from "@/hooks/useFirebaseData";
 
 const Traffic = () => {
-  const { data: trafficFlowData, loading: loadingTrafficFlow, error: errorTrafficFlow } = useFirebaseData("sensors/traffic/flow");
-  const { data: trafficTrendData, loading: loadingTrafficTrend, error: errorTrafficTrend } = useFirebaseData("sensors/traffic/trend");
-  const { data: trafficCongestionData, loading: loadingTrafficCongestion, error: errorTrafficCongestion } = useFirebaseData("sensors/traffic/congestion");
-  const { data: trafficHotspots, loading: loadingTrafficHotspots, error: errorTrafficHotspots } = useFirebaseData("sensors/traffic/hotspots");
-  const { data: trafficControls, loading: loadingTrafficControls, error: errorTrafficControls } = useFirebaseData("devices"); // Assuming traffic controls are devices
-  const { data: trafficStats, loading: loadingTrafficStats, error: errorTrafficStats } = useFirebaseData("stats/traffic");
-  const { data: trafficOverview, loading: loadingTrafficOverview, error: errorTrafficOverview } = useFirebaseData("overview/traffic");
+  const { data: trafficSensorsData, loading: loadingTrafficSensors, error: errorTrafficSensors } = useFirebaseData("traffic_sensors");
+  const { data: intersectionControlData, loading: loadingIntersectionControl, error: errorIntersectionControl } = useFirebaseData("intersection_control");
+  const { data: deviceStatusData, loading: loadingDeviceStatus, error: errorDeviceStatus } = useFirebaseData("device_status");
 
-  // Filter traffic controls from devices
-  const trafficDevices = Object.entries(trafficControls || {})
-    .map(([id, device]) => {
-      if (typeof device === 'object' && device !== null && (device as any).deviceType === 'traffic_light') { // Assuming deviceType 'traffic_light'
-        return { id, ...(device as any) };
-      }
-      return null;
-    })
-    .filter(device => device !== null);
+  // Combine loading and error states
+  const loading = loadingTrafficSensors || loadingIntersectionControl || loadingDeviceStatus;
+  const error = errorTrafficSensors || errorIntersectionControl || errorDeviceStatus;
 
-  if (loadingTrafficFlow || loadingTrafficTrend || loadingTrafficCongestion || loadingTrafficHotspots || loadingTrafficControls || loadingTrafficStats || loadingTrafficOverview) {
+  if (loading) {
     return <DashboardLayout><div>Carregando dados de tráfego...</div></DashboardLayout>;
   }
 
-  if (errorTrafficFlow || errorTrafficTrend || errorTrafficCongestion || errorTrafficHotspots || errorTrafficControls || errorTrafficStats || errorTrafficOverview) {
-    return <DashboardLayout><div>Erro ao carregar dados de tráfego: {errorTrafficFlow?.message || errorTrafficTrend?.message || errorTrafficCongestion?.message || errorTrafficHotspots?.message || errorTrafficControls?.message || errorTrafficStats?.message || errorTrafficOverview?.message}</div></DashboardLayout>;
+  if (error) {
+    return <DashboardLayout><div>Erro ao carregar dados de tráfego: {error?.message}</div></DashboardLayout>;
   }
+
+  // Process data to match expected structure for components
+  const processedTrafficStats: any = {};
+  const processedTrafficCongestionData: any = {};
+  const processedTrafficOverview: any = {};
+  const processedTrafficHotspots: any = {};
+  const processedTrafficDevices: any[] = [];
+  const processedTrafficFlowData: any[] = []; // Cannot be filled with real-time data from current RTDB structure
+  const processedTrafficTrendData: any[] = []; // Cannot be filled with real-time data from current RTDB structure
+  const devicesForMap: any[] = []; // Array to hold devices for the map
+
+  // --- Process trafficSensorsData ---
+  const sensors = Object.entries(trafficSensorsData || {});
+  processedTrafficStats.total_sensors = sensors.length;
+
+  let totalFlowPerMinute = 0;
+  let totalSpeed = 0;
+  let sensorsWithFlowCount = 0;
+  let congestedAreasCount = 0;
+  const congestionLevels: { [key: string]: number } = { LOW: 0, HIGH: 0 };
+
+  sensors.forEach(([id, sensor]: [string, any]) => {
+    if (sensor.traffic_flow) {
+      totalFlowPerMinute += sensor.traffic_flow.vehicles_per_minute || 0;
+      totalSpeed += sensor.traffic_flow.average_speed_kph || 0;
+      sensorsWithFlowCount++;
+
+      if (sensor.traffic_flow.flow_intensity === 'HIGH') {
+        congestedAreasCount++;
+      }
+      if (sensor.traffic_flow.flow_intensity in congestionLevels) {
+        congestionLevels[sensor.traffic_flow.flow_intensity]++;
+      }
+
+      // Data for Hotspots table
+      processedTrafficHotspots[id] = {
+        location: sensor.location?.description || 'N/A',
+        status: sensor.traffic_flow.flow_intensity === 'HIGH' ? 'severe' : 'light', // Mapping LOW/HIGH to severe/light
+        flow: sensor.traffic_flow.vehicles_per_minute || 0,
+        avgSpeed: sensor.traffic_flow.average_speed_kph || 0,
+        waitTime: 'N/A', // Not available in RTDB structure
+      };
+
+      // Add sensor to devices for map
+      if (sensor.location?.lat && sensor.location?.lng) {
+        devicesForMap.push({
+          id: id,
+          lat: sensor.location.lat,
+          lng: sensor.location.lng,
+          type: 'traffic', // Type for map component
+          flow_intensity: sensor.traffic_flow.flow_intensity,
+          status: (deviceStatusData as any)?.[id]?.status // Get online/offline status from deviceStatusData
+        });
+      }
+    }
+  });
+
+  processedTrafficStats.total_flow = totalFlowPerMinute * 60; // Convert per minute to per hour for display
+  processedTrafficStats.avg_wait_time = 'N/A'; // Not available
+  processedTrafficStats.congested_areas = congestedAreasCount;
+  processedTrafficStats.flow_trend = undefined; // Not available
+  processedTrafficStats.wait_time_trend = undefined; // Not available
+  processedTrafficStats.congestion_trend = undefined; // Not available
+
+  // Data for Congestion bar (mapping LOW/HIGH to 4 levels)
+  const lowPercentage = sensorsWithFlowCount > 0 ? (congestionLevels.LOW / sensorsWithFlowCount) * 100 : 0;
+  const highPercentage = sensorsWithFlowCount > 0 ? (congestionLevels.HIGH / sensorsWithFlowCount) * 100 : 0;
+
+  // Distribute percentages across 4 levels (arbitrary mapping)
+  processedTrafficCongestionData.clear = lowPercentage * 0.5; // 50% of LOW
+  processedTrafficCongestionData.light = lowPercentage * 0.5; // 50% of LOW
+  processedTrafficCongestionData.moderate = highPercentage * 0.5; // 50% of HIGH
+  processedTrafficCongestionData.severe = highPercentage * 0.5; // 50% of HIGH
+
+
+  // Data for Traffic Overview
+  processedTrafficOverview.vehicles_per_hour = totalFlowPerMinute * 60; // Convert per minute to per hour
+  processedTrafficOverview.avg_speed = sensorsWithFlowCount > 0 ? totalSpeed / sensorsWithFlowCount : 'N/A';
+  processedTrafficOverview.forecast_level = undefined; // Not available
+  processedTrafficOverview.forecast_percentage = undefined; // Not available
+  processedTrafficOverview.forecast_message = 'Dados de previsão não disponíveis'; // Not available
+
+  // --- Process intersectionControlData and deviceStatusData for Traffic Controls ---
+  const devices = Object.entries(deviceStatusData || {});
+  const intersectionControls = Object.values(intersectionControlData || {});
+
+  devices.forEach(([deviceId, device]: [string, any]) => {
+    if (device.deviceType === 'intersection_controller') {
+      const intersectionControl = intersectionControls.find((control: any) => control.control_status?.controller_device_id === deviceId);
+      // Apply the fix here: cast intersectionControl to any
+      processedTrafficDevices.push({ id: deviceId, status: device.status, location: device.location, mode: (intersectionControl as any)?.control_status?.current_mode || 'N/A' });
+
+      // Add intersection controller to devices for map (if it has location)
+      if (device.location?.lat && device.location?.lng) {
+         devicesForMap.push({
+           id: deviceId,
+           lat: device.location.lat,
+           lng: device.location.lng,
+           type: 'traffic', // Type for map component (can be 'intersection_controller' if map supports it)
+           status: device.status, // Online/offline status
+           // flow_intensity is not applicable to controllers directly
+         });
+       }
+    }
+  });
 
   return (
     <DashboardLayout>
@@ -64,29 +158,29 @@ const Traffic = () => {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-6">
         <StatsCard
           title="Sensores de Tráfego"
-          value={(trafficStats as any)?.total_sensors?.toString() || 'N/A'}
+          value={processedTrafficStats?.total_sensors?.toString() || 'N/A'}
           icon={<Car size={18} />}
           variant="blue"
         />
         <StatsCard
           title="Fluxo Total (hoje)"
-          value={(trafficStats as any)?.total_flow?.toLocaleString() || 'N/A'}
+          value={processedTrafficStats?.total_flow?.toLocaleString() || 'N/A'}
           subtitle="veículos"
           icon={<Activity size={18} />}
           variant="blue"
-          trend={(trafficStats as any)?.flow_trend}
+          trend={processedTrafficStats?.flow_trend}
         />
         <StatsCard
           title="Tempo Médio de Espera"
-          value={(trafficStats as any)?.avg_wait_time || 'N/A'}
-          trend={(trafficStats as any)?.wait_time_trend}
+          value={processedTrafficStats?.avg_wait_time || 'N/A'}
+          trend={processedTrafficStats?.wait_time_trend}
           icon={<Clock size={18} />}
           variant="amber"
         />
         <StatsCard
           title="Áreas Congestionadas"
-          value={(trafficStats as any)?.congested_areas?.toString() || 'N/A'}
-          trend={(trafficStats as any)?.congestion_trend}
+          value={processedTrafficStats?.congested_areas?.toString() || 'N/A'}
+          trend={processedTrafficStats?.congestion_trend}
           icon={<AlertTriangle size={18} />}
           variant="red"
         />
@@ -111,9 +205,9 @@ const Traffic = () => {
                 <span className="text-xs">Intenso</span>
               </div>
             </div>
-          </div>
-          <Map height="400px" deviceTypes={["traffic"]} />
-        </div>
+          </div> {/* Closing tag for the flex container */}
+          <Map height="400px" deviceTypes={["traffic"]} devices={devicesForMap} /> {/* Pass devicesForMap */}
+        </div> {/* Closing tag for lg:col-span-2 */}
         <div>
           <h2 className="text-lg font-semibold mb-4">Visão Geral do Tráfego</h2>
           <Card className="glass-card p-5 h-[400px] flex flex-col">
@@ -122,17 +216,17 @@ const Traffic = () => {
               {/* Assuming trafficCongestionData is an object like { clear: 55, light: 25, moderate: 12, severe: 8 } */}
               <div className="h-4 w-full bg-gray-200 rounded-full overflow-hidden">
                 <div className="flex h-full">
-                  <div className="bg-city-green-500 h-full" style={{ width: `${(trafficCongestionData as any)?.clear || 0}%` }}></div>
-                  <div className="bg-city-amber-400 h-full" style={{ width: `${(trafficCongestionData as any)?.light || 0}%` }}></div>
-                  <div className="bg-city-amber-600 h-full" style={{ width: `${(trafficCongestionData as any)?.moderate || 0}%` }}></div>
-                  <div className="bg-city-red-500 h-full" style={{ width: `${(trafficCongestionData as any)?.severe || 0}%` }}></div>
+                  <div className="bg-city-green-500 h-full" style={{ width: `${processedTrafficCongestionData?.clear || 0}%` }}></div>
+                  <div className="bg-city-amber-400 h-full" style={{ width: `${processedTrafficCongestionData?.light || 0}%` }}></div>
+                  <div className="bg-city-amber-600 h-full" style={{ width: `${processedTrafficCongestionData?.moderate || 0}%` }}></div>
+                  <div className="bg-city-red-500 h-full" style={{ width: `${processedTrafficCongestionData?.severe || 0}%` }}></div>
                 </div>
               </div>
               <div className="flex justify-between mt-1 text-xs text-gray-500">
-                <span>Fluido ({(trafficCongestionData as any)?.clear || 0}%)</span>
-                <span>Leve ({(trafficCongestionData as any)?.light || 0}%)</span>
-                <span>Moderado ({(trafficCongestionData as any)?.moderate || 0}%)</span>
-                <span>Severo ({(trafficCongestionData as any)?.severe || 0}%)</span>
+                <span>Fluido ({processedTrafficCongestionData?.clear?.toFixed(1) || 0}%)</span>
+                <span>Leve ({processedTrafficCongestionData?.light?.toFixed(1) || 0}%)</span>
+                <span>Moderado ({processedTrafficCongestionData?.moderate?.toFixed(1) || 0}%)</span>
+                <span>Severo ({processedTrafficCongestionData?.severe?.toFixed(1) || 0}%)</span>
               </div>
             </div>
 
@@ -141,11 +235,11 @@ const Traffic = () => {
               <div className="grid grid-cols-2 gap-3">
                 <div className="bg-white/50 p-3 rounded-lg">
                   <div className="text-xs text-gray-500">Veículos/Hora</div>
-                  <div className="text-lg font-semibold">{(trafficOverview as any)?.vehicles_per_hour?.toLocaleString() || 'N/A'}</div>
+                  <div className="text-lg font-semibold">{processedTrafficOverview?.vehicles_per_hour?.toLocaleString() || 'N/A'}</div>
                 </div>
                 <div className="bg-white/50 p-3 rounded-lg">
                   <div className="text-xs text-gray-500">Vel. Média</div>
-                  <div className="text-lg font-semibold">{(trafficOverview as any)?.avg_speed || 'N/A'} km/h</div>
+                  <div className="text-lg font-semibold">{processedTrafficOverview?.avg_speed || 'N/A'} km/h</div>
                 </div>
               </div>
             </div>
@@ -158,31 +252,31 @@ const Traffic = () => {
                   <Badge
                     variant="outline"
                     className={`
-                      ${(trafficOverview as any)?.forecast_level === 'severe' ? 'bg-city-red-100 text-city-red-800 border-city-red-200' : ''}
-                      ${(trafficOverview as any)?.forecast_level === 'moderate' ? 'bg-city-amber-100 text-city-amber-800 border-city-amber-200' : ''}
-                      ${(trafficOverview as any)?.forecast_level === 'light' ? 'bg-city-amber-50 text-city-amber-600 border-city-amber-100' : ''}
-                      ${(trafficOverview as any)?.forecast_level === 'clear' ? 'bg-city-green-100 text-city-green-800 border-city-green-200' : ''}
+                      ${processedTrafficOverview?.forecast_level === 'severe' ? 'bg-city-red-100 text-city-red-800 border-city-red-200' : ''}
+                      ${processedTrafficOverview?.forecast_level === 'moderate' ? 'bg-city-amber-100 text-city-amber-800 border-city-amber-200' : ''}
+                      ${processedTrafficOverview?.forecast_level === 'light' ? 'bg-city-amber-50 text-city-amber-600 border-city-amber-100' : ''}
+                      ${processedTrafficOverview?.forecast_level === 'clear' ? 'bg-city-green-100 text-city-green-800 border-city-green-200' : ''}
                     `}
                   >
-                    {(trafficOverview as any)?.forecast_level === 'severe' && 'Severo'}
-                    {(trafficOverview as any)?.forecast_level === 'moderate' && 'Moderado'}
-                    {(trafficOverview as any)?.forecast_level === 'light' && 'Leve'}
-                    {(trafficOverview as any)?.forecast_level === 'clear' && 'Fluido'}
+                    {processedTrafficOverview?.forecast_level === 'severe' && 'Severo'}
+                    {processedTrafficOverview?.forecast_level === 'moderate' && 'Moderado'}
+                    {processedTrafficOverview?.forecast_level === 'light' && 'Leve'}
+                    {processedTrafficOverview?.forecast_level === 'clear' && 'Fluido'}
                   </Badge>
                 </div>
                 <div className="flex items-center gap-2">
                   <div className="flex-1">
                     <div className="h-2 w-full bg-gray-200 rounded-full overflow-hidden">
                       <div
-                        className={`h-full ${(trafficOverview as any)?.forecast_level === 'severe' ? 'bg-city-red-500' : (trafficOverview as any)?.forecast_level === 'moderate' ? 'bg-city-amber-400' : (trafficOverview as any)?.forecast_level === 'light' ? 'bg-city-amber-400' : 'bg-city-green-500'}`}
-                        style={{ width: `${(trafficOverview as any)?.forecast_percentage || 0}%` }}
+                        className={`h-full ${processedTrafficOverview?.forecast_level === 'severe' ? 'bg-city-red-500' : processedTrafficOverview?.forecast_level === 'moderate' ? 'bg-city-amber-400' : processedTrafficOverview?.forecast_level === 'light' ? 'bg-city-amber-400' : 'bg-city-green-500'}`}
+                        style={{ width: `${processedTrafficOverview?.forecast_percentage || 0}%` }}
                       ></div>
                     </div>
                   </div>
-                  <span className="text-xs font-medium">{(trafficOverview as any)?.forecast_percentage || 0}%</span>
+                  <span className="text-xs font-medium">{processedTrafficOverview?.forecast_percentage || 0}%</span>
                 </div>
                 <div className="mt-3 text-xs text-gray-600">
-                  {(trafficOverview as any)?.forecast_message || 'N/A'}
+                  {processedTrafficOverview?.forecast_message || 'N/A'}
                 </div>
               </div>
             </div>
@@ -201,7 +295,7 @@ const Traffic = () => {
         <ChartCard
           title="Fluxo de Tráfego (Hoje)"
           description="Veículos por hora"
-          data={trafficFlowData}
+          data={processedTrafficFlowData} // Using processed data
           type="area"
           dataKeys={["flow"]}
           colors={["#0BC9C0"]}
@@ -210,7 +304,7 @@ const Traffic = () => {
         <ChartCard
           title="Tendência Semanal"
           description="Total de veículos por dia"
-          data={trafficTrendData}
+          data={processedTrafficTrendData} // Using processed data
           type="bar"
           dataKeys={["vehicles"]}
           colors={["#0BC9C0"]}
@@ -249,7 +343,7 @@ const Traffic = () => {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-200">
-                  {Object.entries(trafficHotspots || {}).map(([id, hotspot]) => (
+                  {Object.entries(processedTrafficHotspots || {}).map(([id, hotspot]) => (
                     <tr key={id} className="hover:bg-gray-50/50">
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="text-sm font-medium">{(hotspot as any).location}</div>
@@ -296,7 +390,7 @@ const Traffic = () => {
         <div>
           <h2 className="text-lg font-semibold mb-4">Controle de Semáforos</h2>
           <div className="space-y-4">
-            {trafficDevices.map((control) => (
+            {processedTrafficDevices.map((control) => (
               <div key={control.id} className="glass-card rounded-xl p-4 border border-white/30">
                 <div className="flex items-start">
                   <div className={`p-2 rounded-full ${(control as any).status === 'ONLINE' ? 'bg-city-green-100 text-city-green-600' : 'bg-city-red-100 text-city-red-600'}`}>
@@ -356,4 +450,3 @@ const Traffic = () => {
 };
 
 export default Traffic;
-

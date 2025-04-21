@@ -212,6 +212,9 @@ export default {
 			backdropBlur: {
 				xs: '2px',
 			},
+			fontFamily: {
+				'roboto': ['Roboto', 'sans-serif'],
+			}
 		}
 	},
 	plugins: [require("tailwindcss-animate")],
