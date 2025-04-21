@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState, useMemo } from "react"; // Import useState and useMemo
 import { motion } from "framer-motion";
 import DashboardLayout from "@/layout/DashboardLayout";
 import { StatsCard } from "@/components/StatsCard";
@@ -6,11 +6,18 @@ import { ChartCard } from "@/components/ChartCard";
 import Map from "@/components/Map";
 import { StatusIndicator } from "@/components/StatusIndicator";
 import { useFirebaseData } from "@/hooks/useFirebaseData";
-import { Lightbulb, Power, Clock, BarChart3, Settings, MailWarning } from "lucide-react";
+import { Lightbulb, Power, Clock, BarChart3, Settings, MailWarning, ChevronLeft, ChevronRight } from "lucide-react"; // Import icons for pagination
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { Button } from "@/components/ui/button";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 
 const Lighting = () => {
@@ -55,6 +62,53 @@ const Lighting = () => {
     { name: "Jun", consumption: 6980 },
     { name: "Jul", consumption: 7240 },
   ];
+  // Pagination states
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(10); // Default items per page
+
+  // Process data to match expected structure for map
+  const devicesForMap = useMemo(() => {
+    const devices: any[] = [];
+
+    lightingDevices.forEach(device => {
+      // Check if device has location data in deviceStatus
+      const deviceLocation = deviceStatus?.[device.id]?.location;
+      if (deviceLocation?.lat && deviceLocation?.lng) {
+        devices.push({
+          id: device.id,
+          lat: deviceLocation.lat,
+          lng: deviceLocation.lng,
+          type: 'lighting', // Type for map component
+          status: deviceStatus?.[device.id]?.status, // Get online/offline status from deviceStatusData
+          location: deviceLocation // Include location object for tooltip description
+        });
+      }
+    });
+
+    return devices;
+  }, [lightingDevices, deviceStatus]); // Dependencies for useMemo
+
+  // Pagination logic for devicesForMap
+  const totalDevicesForMap = devicesForMap.length;
+  const totalPages = Math.ceil(totalDevicesForMap / itemsPerPage);
+
+  const currentDevicesForMap = useMemo(() => {
+    const indexOfLastItem = currentPage * itemsPerPage;
+    const indexOfFirstItem = indexOfLastItem - itemsPerPage;
+    return devicesForMap.slice(indexOfFirstItem, indexOfLastItem);
+  }, [currentPage, itemsPerPage, devicesForMap]);
+
+  const handlePageChange = (pageNumber: number) => {
+    setCurrentPage(pageNumber);
+  };
+
+  const handleItemsPerPageChange = (value: string) => {
+    setItemsPerPage(Number(value));
+    setCurrentPage(1); // Reset to first page when items per page changes
+  };
+
+
+  // Combine loading and error states for conditional rendering
 
   const lightingDeviceIssues = [
     { id: 1, deviceId: "LT-2389", issue: "Sem resposta", location: "Av. Paulista, 1500", since: "2h 15m" },
@@ -123,8 +177,46 @@ const Lighting = () => {
               <StatusIndicator variant="offline">Desligadas ({devicesOff})</StatusIndicator>
             </div>
           </div>
-          <Map height="400px" deviceTypes={["lighting"]} />
-        </div>
+          <Map height="400px" deviceTypes={["lighting"]} devices={currentDevicesForMap} /> {/* Pass paginated devices */}
+           {/* Pagination Controls */}
+           <div className="flex items-center justify-between mt-4">
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-gray-700">Itens por página:</span>
+              <Select value={itemsPerPage.toString()} onValueChange={handleItemsPerPageChange}>
+                <SelectTrigger className="w-20 h-8 text-xs">
+                  <SelectValue placeholder="10" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="5">5</SelectItem>
+                  <SelectItem value="10">10</SelectItem>
+                  <SelectItem value="20">20</SelectItem>
+                  <SelectItem value="50">50</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => handlePageChange(currentPage - 1)}
+                disabled={currentPage === 1}
+              >
+                <ChevronLeft size={16} />
+                Anterior
+              </Button>
+              <span className="text-sm text-gray-700">Página {currentPage} de {totalPages}</span>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => handlePageChange(currentPage + 1)}
+                disabled={currentPage === totalPages}
+              >
+                Próximo
+                <ChevronRight size={16} />
+              </Button>
+            </div>
+          </div>
+        </div> {/* Closing tag for lg:col-span-2 */}
         <div>
           <h2 className="text-lg font-semibold mb-4">Controle Central</h2>
           <Card className="glass-card p-5 space-y-6">

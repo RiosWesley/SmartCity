@@ -1,16 +1,22 @@
-
-import React from "react";
+import React, { useState, useMemo } from "react"; // Import useState and useMemo
 import { motion } from "framer-motion";
 import DashboardLayout from "@/layout/DashboardLayout";
 import { StatsCard } from "@/components/StatsCard";
 import { ChartCard } from "@/components/ChartCard";
 import Map from "@/components/Map";
 import { StatusIndicator } from "@/components/StatusIndicator";
-import { Leaf, Thermometer, DropletIcon, Wind, AlertCircle, BarChart3 } from "lucide-react";
+import { Leaf, Thermometer, DropletIcon, Wind, AlertCircle, BarChart3, ChevronLeft, ChevronRight } from "lucide-react"; // Import icons for pagination
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 // Mock data for environment page
 const airQualityData = [
@@ -54,58 +60,58 @@ const noiseData = [
 ];
 
 const environmentalZones = [
-  { 
-    id: 1, 
-    name: "Parque Ibirapuera", 
-    airQuality: "Boa", 
-    aqi: 42, 
-    temp: 24, 
-    humidity: 65, 
+  {
+    id: 1,
+    name: "Parque Ibirapuera",
+    airQuality: "Boa",
+    aqi: 42,
+    temp: 24,
+    humidity: 65,
     noise: 45
   },
-  { 
-    id: 2, 
-    name: "Centro", 
-    airQuality: "Moderada", 
-    aqi: 75, 
-    temp: 26, 
-    humidity: 58, 
+  {
+    id: 2,
+    name: "Centro",
+    airQuality: "Moderada",
+    aqi: 75,
+    temp: 26,
+    humidity: 58,
     noise: 70
   },
-  { 
-    id: 3, 
-    name: "Zona Leste", 
-    airQuality: "Ruim", 
-    aqi: 95, 
-    temp: 27, 
-    humidity: 62, 
+  {
+    id: 3,
+    name: "Zona Leste",
+    airQuality: "Ruim",
+    aqi: 95,
+    temp: 27,
+    humidity: 62,
     noise: 65
   },
-  { 
-    id: 4, 
-    name: "Zona Norte", 
-    airQuality: "Boa", 
-    aqi: 48, 
-    temp: 25, 
-    humidity: 60, 
+  {
+    id: 4,
+    name: "Zona Norte",
+    airQuality: "Boa",
+    aqi: 48,
+    temp: 25,
+    humidity: 60,
     noise: 55
   },
-  { 
-    id: 5, 
-    name: "Zona Sul", 
-    airQuality: "Boa", 
-    aqi: 52, 
-    temp: 24, 
-    humidity: 63, 
+  {
+    id: 5,
+    name: "Zona Sul",
+    airQuality: "Boa",
+    aqi: 52,
+    temp: 24,
+    humidity: 63,
     noise: 50
   },
-  { 
-    id: 6, 
-    name: "Zona Oeste", 
-    airQuality: "Moderada", 
-    aqi: 65, 
-    temp: 26, 
-    humidity: 59, 
+  {
+    id: 6,
+    name: "Zona Oeste",
+    airQuality: "Moderada",
+    aqi: 65,
+    temp: 26,
+    humidity: 59,
     noise: 60
   },
 ];
@@ -143,12 +149,62 @@ const Environment = () => {
   const activeSensors = environmentalDevices.filter(device => device.status === 'ONLINE').length;
   const inactiveSensors = environmentalDevices.length - activeSensors;
 
+  // Pagination states
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(10); // Default items per page
 
-  if (loadingAirQuality || loadingTemperature || loadingHumidity || loadingNoise || loadingEnvironmentalZones || loadingEnvironmentStats || loadingEnvironmentOverview || loadingDeviceStatus) {
+  // Process data to match expected structure for map
+  const devicesForMap = useMemo(() => {
+    const devices: any[] = [];
+
+    environmentalDevices.forEach(device => {
+      // Check if device has location data in deviceStatus
+      const deviceLocation = deviceStatus?.[device.id]?.location;
+      if (deviceLocation?.lat && deviceLocation?.lng) {
+        devices.push({
+          id: device.id,
+          lat: deviceLocation.lat,
+          lng: deviceLocation.lng,
+          type: 'environmental', // Type for map component
+          status: deviceStatus?.[device.id]?.status, // Get online/offline status from deviceStatusData
+          location: deviceLocation // Include location object for tooltip description
+        });
+      }
+    });
+
+    return devices;
+  }, [environmentalDevices, deviceStatus]); // Dependencies for useMemo
+
+  // Pagination logic for devicesForMap
+  const totalDevicesForMap = devicesForMap.length;
+  const totalPages = Math.ceil(totalDevicesForMap / itemsPerPage);
+
+  const currentDevicesForMap = useMemo(() => {
+    const indexOfLastItem = currentPage * itemsPerPage;
+    const indexOfFirstItem = indexOfLastItem - itemsPerPage;
+    return devicesForMap.slice(indexOfFirstItem, indexOfLastItem);
+  }, [currentPage, itemsPerPage, devicesForMap]);
+
+  const handlePageChange = (pageNumber: number) => {
+    setCurrentPage(pageNumber);
+  };
+
+  const handleItemsPerPageChange = (value: string) => {
+    setItemsPerPage(Number(value));
+    setCurrentPage(1); // Reset to first page when items per page changes
+  };
+
+
+  // Combine loading and error states for conditional rendering
+  const loading = loadingAirQuality || loadingTemperature || loadingHumidity || loadingNoise || loadingEnvironmentalZones || loadingEnvironmentStats || loadingEnvironmentOverview || loadingDeviceStatus;
+  const error = errorAirQuality || errorTemperature || errorHumidity || errorNoise || errorEnvironmentalZones || errorEnvironmentStats || errorEnvironmentOverview || errorDeviceStatus;
+
+
+  if (loading) {
     return <DashboardLayout><div>Carregando dados ambientais...</div></DashboardLayout>;
   }
 
-  if (errorAirQuality || errorTemperature || errorHumidity || errorNoise || errorEnvironmentalZones || errorEnvironmentStats || errorEnvironmentOverview || errorDeviceStatus) {
+  if (error) {
     return <DashboardLayout><div>Erro ao carregar dados ambientais: {errorAirQuality?.message || errorTemperature?.message || errorHumidity?.message || errorNoise?.message || errorEnvironmentalZones?.message || errorEnvironmentStats?.message || errorEnvironmentOverview?.message || errorDeviceStatus?.message}</div></DashboardLayout>;
   }
 
@@ -206,8 +262,46 @@ const Environment = () => {
               <StatusIndicator variant="offline">Inativos ({inactiveSensors})</StatusIndicator>
             </div>
           </div>
-          <Map height="400px" deviceTypes={["environmental"]} />
-        </div>
+          <Map height="400px" deviceTypes={["environmental"]} devices={currentDevicesForMap} /> {/* Pass paginated devices */}
+           {/* Pagination Controls */}
+           <div className="flex items-center justify-between mt-4">
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-gray-700">Itens por página:</span>
+              <Select value={itemsPerPage.toString()} onValueChange={handleItemsPerPageChange}>
+                <SelectTrigger className="w-20 h-8 text-xs">
+                  <SelectValue placeholder="10" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="5">5</SelectItem>
+                  <SelectItem value="10">10</SelectItem>
+                  <SelectItem value="20">20</SelectItem>
+                  <SelectItem value="50">50</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => handlePageChange(currentPage - 1)}
+                disabled={currentPage === 1}
+              >
+                <ChevronLeft size={16} />
+                Anterior
+              </Button>
+              <span className="text-sm text-gray-700">Página {currentPage} de {totalPages}</span>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => handlePageChange(currentPage + 1)}
+                disabled={currentPage === totalPages}
+              >
+                Próximo
+                <ChevronRight size={16} />
+              </Button>
+            </div>
+          </div>
+        </div> {/* Closing tag for lg:col-span-2 */}
         <div>
           <h2 className="text-lg font-semibold mb-4">Índice de Qualidade do Ar</h2>
           <Card className="glass-card p-5 h-[400px] flex flex-col overflow-auto">

@@ -28,6 +28,9 @@ interface MapProps {
     type: "lighting" | "traffic" | "environmental";
     status?: string; // Device status (online/offline)
     flow_intensity?: "LOW" | "HIGH"; // Traffic flow intensity
+    location?: { // Add location property to device type
+      description?: string;
+    };
   }[];
 }
 
@@ -56,7 +59,7 @@ const Map: React.FC<MapProps> = ({
     return () => clearTimeout(timer);
   }, []);
 
-  // Filter devices based on deviceTypes and use provided devices or mock data
+  // Filter devices based on deviceTypes and use provided devices or empty array if none
   const devicesToDisplay = devices || []; // Use provided devices or empty array if none
   const filteredDevices = devicesToDisplay.filter(device => deviceTypes.includes(device.type));
 
@@ -122,6 +125,7 @@ const Map: React.FC<MapProps> = ({
                   // More advanced customization would require custom icons
                   url: `http://maps.google.com/mapfiles/ms/icons/${getMarkerColor(device)}.png`,
                 }}
+                title={device.location?.description || device.id} // Add title for tooltip
               />
             ))}
           </GoogleMap>

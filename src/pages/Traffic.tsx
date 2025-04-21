@@ -1,11 +1,11 @@
-import React from "react";
+import React, { useState, useMemo } from "react"; // Import useState and useMemo
 import { motion } from "framer-motion";
 import DashboardLayout from "@/layout/DashboardLayout";
 import { StatsCard } from "@/components/StatsCard";
 import { ChartCard } from "@/components/ChartCard";
 import Map from "@/components/Map";
 import { StatusIndicator } from "@/components/StatusIndicator";
-import { Car, Activity, Clock, AlertTriangle, BarChart3 } from "lucide-react";
+import { Car, Activity, Clock, AlertTriangle, BarChart3, ChevronLeft, ChevronRight } from "lucide-react"; // Import icons for pagination
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -20,13 +20,169 @@ import {
 import { useFirebaseData } from "@/hooks/useFirebaseData";
 
 const Traffic = () => {
+  // Fetch data from Firebase
   const { data: trafficSensorsData, loading: loadingTrafficSensors, error: errorTrafficSensors } = useFirebaseData("traffic_sensors");
   const { data: intersectionControlData, loading: loadingIntersectionControl, error: errorIntersectionControl } = useFirebaseData("intersection_control");
   const { data: deviceStatusData, loading: loadingDeviceStatus, error: errorDeviceStatus } = useFirebaseData("device_status");
 
-  // Combine loading and error states
+  // Pagination states
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(10); // Default items per page
+
+  // Process data to match expected structure for components and map
+  const {
+    processedTrafficStats,
+    processedTrafficCongestionData,
+    processedTrafficOverview,
+    processedTrafficHotspots,
+    processedTrafficDevices,
+    processedTrafficFlowData,
+    processedTrafficTrendData,
+    devicesForMap,
+  } = useMemo(() => {
+    const processedTrafficStats: any = {};
+    const processedTrafficCongestionData: any = {};
+    const processedTrafficOverview: any = {};
+    const processedTrafficHotspots: any = {};
+    const processedTrafficDevices: any[] = [];
+    const processedTrafficFlowData: any[] = []; // Cannot be filled with real-time data from current RTDB structure
+    const processedTrafficTrendData: any[] = []; // Cannot be filled with real-time data from current RTDB structure
+    const devicesForMap: any[] = []; // Array to hold devices for the map
+
+    // --- Process trafficSensorsData ---
+    const sensors = Object.entries(trafficSensorsData || {});
+    processedTrafficStats.total_sensors = sensors.length;
+
+    let totalFlowPerMinute = 0;
+    let totalSpeed = 0;
+    let sensorsWithFlowCount = 0;
+    let congestedAreasCount = 0;
+    const congestionLevels: { [key: string]: number } = { LOW: 0, HIGH: 0 };
+
+    sensors.forEach(([id, sensor]: [string, any]) => {
+      if (sensor.traffic_flow) {
+        totalFlowPerMinute += sensor.traffic_flow.vehicles_per_minute || 0;
+        totalSpeed += sensor.traffic_flow.average_speed_kph || 0;
+        sensorsWithFlowCount++;
+
+        if (sensor.traffic_flow.flow_intensity === 'HIGH') {
+          congestedAreasCount++;
+        }
+        if (sensor.traffic_flow.flow_intensity in congestionLevels) {
+          congestionLevels[sensor.traffic_flow.flow_intensity]++;
+        }
+
+        // Data for Hotspots table
+        processedTrafficHotspots[id] = {
+          location: sensor.location?.description || 'N/A',
+          status: sensor.traffic_flow.flow_intensity === 'HIGH' ? 'severe' : 'light', // Mapping LOW/HIGH to severe/light
+          flow: sensor.traffic_flow.vehicles_per_minute || 0,
+          avgSpeed: sensor.traffic_flow.average_speed_kph || 0,
+          waitTime: 'N/A', // Not available in RTDB structure
+        };
+
+        // Add sensor to devices for map
+        if (sensor.location?.lat && sensor.location?.lng) {
+          devicesForMap.push({
+            id: id,
+            lat: sensor.location.lat,
+            lng: sensor.location.lng,
+            type: 'traffic', // Type for map component
+            flow_intensity: sensor.traffic_flow.flow_intensity,
+            status: (deviceStatusData as any)?.[id]?.status, // Get online/offline status from deviceStatusData
+            location: sensor.location // Include location object for tooltip description
+          });
+        }
+      }
+    });
+
+    processedTrafficStats.total_flow = totalFlowPerMinute * 60; // Convert per minute to per hour for display
+    processedTrafficStats.avg_wait_time = 'N/A'; // Not available
+    processedTrafficStats.congested_areas = congestedAreasCount;
+    processedTrafficStats.flow_trend = undefined; // Not available
+    processedTrafficStats.wait_time_trend = undefined; // Not available
+    processedTrafficStats.congestion_trend = undefined; // Not available
+
+    // Data for Congestion bar (mapping LOW/HIGH to 4 levels)
+    const lowPercentage = sensorsWithFlowCount > 0 ? (congestionLevels.LOW / sensorsWithFlowCount) * 100 : 0;
+    const highPercentage = sensorsWithFlowCount > 0 ? (congestionLevels.HIGH / sensorsWithFlowCount) * 100 : 0;
+
+    // Distribute percentages across 4 levels (arbitrary mapping)
+    processedTrafficCongestionData.clear = lowPercentage * 0.5; // 50% of LOW
+    processedTrafficCongestionData.light = lowPercentage * 0.5; // 50% of LOW
+    processedTrafficCongestionData.moderate = highPercentage * 0.5; // 50% of HIGH
+    processedTrafficCongestionData.severe = highPercentage * 0.5; // 50% of HIGH
+
+
+    // Data for Traffic Overview
+    processedTrafficOverview.vehicles_per_hour = totalFlowPerMinute * 60; // Convert per minute to per hour
+    processedTrafficOverview.avg_speed = sensorsWithFlowCount > 0 ? totalSpeed / sensorsWithFlowCount : 'N/A';
+    processedTrafficOverview.forecast_level = undefined; // Not available
+    processedTrafficOverview.forecast_percentage = undefined; // Not available
+    processedTrafficOverview.forecast_message = 'Dados de previsão não disponíveis'; // Not available
+
+    // --- Process intersectionControlData and deviceStatusData for Traffic Controls ---
+    const devices = Object.entries(deviceStatusData || {});
+    const intersectionControls = Object.values(intersectionControlData || {});
+
+    devices.forEach(([deviceId, device]: [string, any]) => {
+      if (device.deviceType === 'intersection_controller') {
+        const intersectionControl = intersectionControls.find((control: any) => control.control_status?.controller_device_id === deviceId);
+        // Apply the fix here: cast intersectionControl to any
+        processedTrafficDevices.push({ id: deviceId, status: device.status, location: device.location, mode: (intersectionControl as any)?.control_status?.current_mode || 'N/A' });
+
+        // Add intersection controller to devices for map (if it has location)
+        if (device.location?.lat && device.location?.lng) {
+           devicesForMap.push({
+             id: deviceId,
+             lat: device.location.lat,
+             lng: device.location.lng,
+             type: 'traffic', // Type for map component (can be 'intersection_controller' if map supports it)
+             status: device.status, // Online/offline status
+             location: device.location // Include location object for tooltip description
+             // flow_intensity is not applicable to controllers directly
+           });
+         }
+      }
+    });
+
+    return {
+      processedTrafficStats,
+      processedTrafficCongestionData,
+      processedTrafficOverview,
+      processedTrafficHotspots,
+      processedTrafficDevices,
+      processedTrafficFlowData,
+      processedTrafficTrendData,
+      devicesForMap,
+    };
+  }, [trafficSensorsData, intersectionControlData, deviceStatusData]); // Dependencies for useMemo
+
+
+  // Pagination logic for devicesForMap
+  const totalDevices = devicesForMap.length;
+  const totalPages = Math.ceil(totalDevices / itemsPerPage);
+
+  const currentDevicesForMap = useMemo(() => {
+    const indexOfLastItem = currentPage * itemsPerPage;
+    const indexOfFirstItem = indexOfLastItem - itemsPerPage;
+    return devicesForMap.slice(indexOfFirstItem, indexOfLastItem);
+  }, [currentPage, itemsPerPage, devicesForMap]);
+
+  const handlePageChange = (pageNumber: number) => {
+    setCurrentPage(pageNumber);
+  };
+
+  const handleItemsPerPageChange = (value: string) => {
+    setItemsPerPage(Number(value));
+    setCurrentPage(1); // Reset to first page when items per page changes
+  };
+
+
+  // Combine loading and error states for conditional rendering
   const loading = loadingTrafficSensors || loadingIntersectionControl || loadingDeviceStatus;
   const error = errorTrafficSensors || errorIntersectionControl || errorDeviceStatus;
+
 
   if (loading) {
     return <DashboardLayout><div>Carregando dados de tráfego...</div></DashboardLayout>;
@@ -36,110 +192,6 @@ const Traffic = () => {
     return <DashboardLayout><div>Erro ao carregar dados de tráfego: {error?.message}</div></DashboardLayout>;
   }
 
-  // Process data to match expected structure for components
-  const processedTrafficStats: any = {};
-  const processedTrafficCongestionData: any = {};
-  const processedTrafficOverview: any = {};
-  const processedTrafficHotspots: any = {};
-  const processedTrafficDevices: any[] = [];
-  const processedTrafficFlowData: any[] = []; // Cannot be filled with real-time data from current RTDB structure
-  const processedTrafficTrendData: any[] = []; // Cannot be filled with real-time data from current RTDB structure
-  const devicesForMap: any[] = []; // Array to hold devices for the map
-
-  // --- Process trafficSensorsData ---
-  const sensors = Object.entries(trafficSensorsData || {});
-  processedTrafficStats.total_sensors = sensors.length;
-
-  let totalFlowPerMinute = 0;
-  let totalSpeed = 0;
-  let sensorsWithFlowCount = 0;
-  let congestedAreasCount = 0;
-  const congestionLevels: { [key: string]: number } = { LOW: 0, HIGH: 0 };
-
-  sensors.forEach(([id, sensor]: [string, any]) => {
-    if (sensor.traffic_flow) {
-      totalFlowPerMinute += sensor.traffic_flow.vehicles_per_minute || 0;
-      totalSpeed += sensor.traffic_flow.average_speed_kph || 0;
-      sensorsWithFlowCount++;
-
-      if (sensor.traffic_flow.flow_intensity === 'HIGH') {
-        congestedAreasCount++;
-      }
-      if (sensor.traffic_flow.flow_intensity in congestionLevels) {
-        congestionLevels[sensor.traffic_flow.flow_intensity]++;
-      }
-
-      // Data for Hotspots table
-      processedTrafficHotspots[id] = {
-        location: sensor.location?.description || 'N/A',
-        status: sensor.traffic_flow.flow_intensity === 'HIGH' ? 'severe' : 'light', // Mapping LOW/HIGH to severe/light
-        flow: sensor.traffic_flow.vehicles_per_minute || 0,
-        avgSpeed: sensor.traffic_flow.average_speed_kph || 0,
-        waitTime: 'N/A', // Not available in RTDB structure
-      };
-
-      // Add sensor to devices for map
-      if (sensor.location?.lat && sensor.location?.lng) {
-        devicesForMap.push({
-          id: id,
-          lat: sensor.location.lat,
-          lng: sensor.location.lng,
-          type: 'traffic', // Type for map component
-          flow_intensity: sensor.traffic_flow.flow_intensity,
-          status: (deviceStatusData as any)?.[id]?.status // Get online/offline status from deviceStatusData
-        });
-      }
-    }
-  });
-
-  processedTrafficStats.total_flow = totalFlowPerMinute * 60; // Convert per minute to per hour for display
-  processedTrafficStats.avg_wait_time = 'N/A'; // Not available
-  processedTrafficStats.congested_areas = congestedAreasCount;
-  processedTrafficStats.flow_trend = undefined; // Not available
-  processedTrafficStats.wait_time_trend = undefined; // Not available
-  processedTrafficStats.congestion_trend = undefined; // Not available
-
-  // Data for Congestion bar (mapping LOW/HIGH to 4 levels)
-  const lowPercentage = sensorsWithFlowCount > 0 ? (congestionLevels.LOW / sensorsWithFlowCount) * 100 : 0;
-  const highPercentage = sensorsWithFlowCount > 0 ? (congestionLevels.HIGH / sensorsWithFlowCount) * 100 : 0;
-
-  // Distribute percentages across 4 levels (arbitrary mapping)
-  processedTrafficCongestionData.clear = lowPercentage * 0.5; // 50% of LOW
-  processedTrafficCongestionData.light = lowPercentage * 0.5; // 50% of LOW
-  processedTrafficCongestionData.moderate = highPercentage * 0.5; // 50% of HIGH
-  processedTrafficCongestionData.severe = highPercentage * 0.5; // 50% of HIGH
-
-
-  // Data for Traffic Overview
-  processedTrafficOverview.vehicles_per_hour = totalFlowPerMinute * 60; // Convert per minute to per hour
-  processedTrafficOverview.avg_speed = sensorsWithFlowCount > 0 ? totalSpeed / sensorsWithFlowCount : 'N/A';
-  processedTrafficOverview.forecast_level = undefined; // Not available
-  processedTrafficOverview.forecast_percentage = undefined; // Not available
-  processedTrafficOverview.forecast_message = 'Dados de previsão não disponíveis'; // Not available
-
-  // --- Process intersectionControlData and deviceStatusData for Traffic Controls ---
-  const devices = Object.entries(deviceStatusData || {});
-  const intersectionControls = Object.values(intersectionControlData || {});
-
-  devices.forEach(([deviceId, device]: [string, any]) => {
-    if (device.deviceType === 'intersection_controller') {
-      const intersectionControl = intersectionControls.find((control: any) => control.control_status?.controller_device_id === deviceId);
-      // Apply the fix here: cast intersectionControl to any
-      processedTrafficDevices.push({ id: deviceId, status: device.status, location: device.location, mode: (intersectionControl as any)?.control_status?.current_mode || 'N/A' });
-
-      // Add intersection controller to devices for map (if it has location)
-      if (device.location?.lat && device.location?.lng) {
-         devicesForMap.push({
-           id: deviceId,
-           lat: device.location.lat,
-           lng: device.location.lng,
-           type: 'traffic', // Type for map component (can be 'intersection_controller' if map supports it)
-           status: device.status, // Online/offline status
-           // flow_intensity is not applicable to controllers directly
-         });
-       }
-    }
-  });
 
   return (
     <DashboardLayout>
@@ -206,7 +258,45 @@ const Traffic = () => {
               </div>
             </div>
           </div> {/* Closing tag for the flex container */}
-          <Map height="400px" deviceTypes={["traffic"]} devices={devicesForMap} /> {/* Pass devicesForMap */}
+          <Map height="400px" deviceTypes={["traffic"]} devices={currentDevicesForMap} /> {/* Pass paginated devices */}
+           {/* Pagination Controls */}
+           <div className="flex items-center justify-between mt-4">
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-gray-700">Itens por página:</span>
+              <Select value={itemsPerPage.toString()} onValueChange={handleItemsPerPageChange}>
+                <SelectTrigger className="w-20 h-8 text-xs">
+                  <SelectValue placeholder="10" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="5">5</SelectItem>
+                  <SelectItem value="10">10</SelectItem>
+                  <SelectItem value="20">20</SelectItem>
+                  <SelectItem value="50">50</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => handlePageChange(currentPage - 1)}
+                disabled={currentPage === 1}
+              >
+                <ChevronLeft size={16} />
+                Anterior
+              </Button>
+              <span className="text-sm text-gray-700">Página {currentPage} de {totalPages}</span>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => handlePageChange(currentPage + 1)}
+                disabled={currentPage === totalPages}
+              >
+                Próximo
+                <ChevronRight size={16} />
+              </Button>
+            </div>
+          </div>
         </div> {/* Closing tag for lg:col-span-2 */}
         <div>
           <h2 className="text-lg font-semibold mb-4">Visão Geral do Tráfego</h2>
