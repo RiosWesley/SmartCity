@@ -29,6 +29,7 @@ const Navbar: React.FC<NavbarProps> = ({ sidebarOpen, setSidebarOpen }) => {
     { name: "Tráfego", path: "/traffic", icon: Car },
     { name: "Ambiente", path: "/environment", icon: Leaf },
     { name: "Alertas", path: "/alerts", icon: Bell },
+    { name: "Dispositivos", path: "/devices", icon: Settings },
     { name: "Relatórios", path: "/reports", icon: BarChart3 },
     { name: "Configurações", path: "/settings", icon: Settings },
   ];
