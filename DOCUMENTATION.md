@@ -329,7 +329,7 @@ A estrutura do Realtime Database no Firebase é organizada da seguinte forma par
 
 ### Próximos Passos Essenciais para Tornar o Sistema Funcional (Ordem Lógica Sugerida)
 
-1.  **Implementar a integração completa com o Firebase no Frontend React:** **(Prioridade Máxima)**
+1.  **Implementar a integração completa com o Firebase no Frontend React:** **(Prioridade Máxima)** [x]
     *   [x] Adicionar o SDK do Firebase ao projeto React: `npm install firebase` ou `bun add firebase`.
     *   [x] Configurar um projeto no Firebase Console e obter as credenciais de configuração (API Key, Auth Domain, Database URL, etc.).
     *   [x] Criar um arquivo de configuração Firebase (e.g., `src/lib/firebase-config.ts`) no projeto React com as credenciais obtidas (garantir que este arquivo seja adicionado ao `.gitignore` se contiver informações sensíveis).
@@ -345,7 +345,8 @@ A estrutura do Realtime Database no Firebase é organizada da seguinte forma par
     *   [x] Substituir dados mockados na página Alertas (`src/pages/Alerts.tsx`).
     *   [x] Substituir dados mockados na página Relatórios (`src/pages/Reports.tsx`).
     *   [x] Substituir dados mockados na página Configurações (`src/pages/Settings.tsx`).
-    *   [ ] Implementar a funcionalidade de envio de comandos do frontend para os dispositivos ESP32 através da escrita de dados em um nó específico do Firebase Realtime Database (e.g., `/commands/[deviceId]`).
+    *   [x] Substituir dados mockados na página Dispositivos (`src/pages/Devices.tsx`).
+    *   [x] Implementar a funcionalidade de envio de comandos do frontend para os dispositivos ESP32 através da escrita de dados em um nó específico do Firebase Realtime Database (e.g., `/commands/[deviceId]`).
 
 2.  **Desenvolver o firmware para os dispositivos ESP32 (Após configuração do Firebase):**
     *   [ ] Configurar o ambiente de desenvolvimento para ESP32 (Arduino IDE ou PlatformIO) com as bibliotecas necessárias (e.g., `FirebaseESP32`, `WiFi`, `ArduinoJson`, bibliotecas de sensores específicos).
