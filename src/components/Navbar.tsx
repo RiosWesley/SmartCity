@@ -14,6 +14,12 @@ import {
   ChevronRight,
 } from "lucide-react";
 import { motion } from "framer-motion";
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from "@/components/ui/accordion";
 
 interface NavbarProps {
   sidebarOpen: boolean;
@@ -25,7 +31,15 @@ const Navbar: React.FC<NavbarProps> = ({ sidebarOpen, setSidebarOpen }) => {
   
   const navLinks = [
     { name: "Dashboard", path: "/", icon: LayoutDashboard },
-    { name: "Iluminação", path: "/lighting", icon: Lightbulb },
+    {
+      name: "Iluminação",
+      icon: Lightbulb,
+      children: [
+        { name: "Visão Geral", path: "/lighting" },
+        { name: "Postes", path: "/lighting/poles" },
+        { name: "Configurações", path: "/lighting/settings" },
+      ]
+    },
     { name: "Tráfego", path: "/traffic", icon: Car },
     { name: "Ambiente", path: "/environment", icon: Leaf },
     { name: "Alertas", path: "/alerts", icon: Bell },
@@ -87,6 +101,49 @@ const Navbar: React.FC<NavbarProps> = ({ sidebarOpen, setSidebarOpen }) => {
             <ul className="space-y-1">
               {navLinks.map((link) => {
                 const isActive = location.pathname === link.path;
+
+                if (link.children) {
+                  return (
+                    <li key={link.name}>
+                      <Accordion type="single" collapsible className="w-full">
+                        <AccordionItem value={link.name}>
+                          <AccordionTrigger className="flex items-center rounded-lg px-3 py-2.5 transition-all duration-200 hover:bg-white/10 [&[data-state=open]>svg]:text-yellow-400 [&[data-state=open]>svg]:rotate-0">
+                            <link.icon size={20} className={`${!sidebarOpen && "mx-auto"}`} />
+                            {sidebarOpen && <span className="ml-3 font-medium">{link.name}</span>}
+                          </AccordionTrigger>
+                          <AccordionContent>
+                            <ul className="ml-6 space-y-1">
+                              {link.children.map((child) => {
+                                const isChildActive = location.pathname === child.path;
+                                return (
+                                  <li key={child.path}>
+                                    <Link
+                                      to={child.path}
+                                      className={`flex items-center rounded-lg px-3 py-2 transition-all duration-200 ${
+                                        isChildActive
+                                          ? "bg-city-blue-500 text-white"
+                                          : "hover:bg-white/10"
+                                      }`}
+                                    >
+                                      {sidebarOpen && <span className="ml-3 font-medium">{child.name}</span>}
+                                      {isChildActive && sidebarOpen && (
+                                        <motion.div
+                                          layoutId="activeIndicator"
+                                          className="absolute right-4 w-1.5 h-1.5 rounded-full bg-white"
+                                        />
+                                      )}
+                                    </Link>
+                                  </li>
+                                );
+                              })}
+                            </ul>
+                          </AccordionContent>
+                        </AccordionItem>
+                      </Accordion>
+                    </li>
+                  );
+                }
+
                 return (
                   <li key={link.path}>
                     <Link

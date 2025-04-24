@@ -169,7 +169,7 @@ const Lighting = () => {
 
       {/* Map and Controls */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
-        <div className="lg:col-span-2">
+        <div className="lg:col-span-3">
           <div className="mb-4 flex items-center justify-between">
             <h2 className="text-lg font-semibold">Mapa de Iluminação</h2>
             <div className="flex items-center gap-2">
@@ -178,112 +178,9 @@ const Lighting = () => {
             </div>
           </div>
           <Map height="400px" deviceTypes={["lighting"]} devices={currentDevicesForMap} /> {/* Pass paginated devices */}
-           {/* Pagination Controls */}
-           <div className="flex items-center justify-between mt-4">
-            <div className="flex items-center gap-2">
-              <span className="text-sm text-gray-700">Itens por página:</span>
-              <Select value={itemsPerPage.toString()} onValueChange={handleItemsPerPageChange}>
-                <SelectTrigger className="w-20 h-8 text-xs">
-                  <SelectValue placeholder="10" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="5">5</SelectItem>
-                  <SelectItem value="10">10</SelectItem>
-                  <SelectItem value="20">20</SelectItem>
-                  <SelectItem value="50">50</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="flex items-center gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => handlePageChange(currentPage - 1)}
-                disabled={currentPage === 1}
-              >
-                <ChevronLeft size={16} />
-                Anterior
-              </Button>
-              <span className="text-sm text-gray-700">Página {currentPage} de {totalPages}</span>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => handlePageChange(currentPage + 1)}
-                disabled={currentPage === totalPages}
-              >
-                Próximo
-                <ChevronRight size={16} />
-              </Button>
-            </div>
-          </div>
+          
         </div> {/* Closing tag for lg:col-span-2 */}
-        <div>
-          <h2 className="text-lg font-semibold mb-4">Controle Central</h2>
-          <Card className="glass-card p-5 space-y-6">
-            <div>
-              <h3 className="text-sm font-medium mb-3">Estado Global</h3>
-              <div className="flex items-center justify-between">
-                <span className="flex items-center">
-                  <Lightbulb size={18} className="mr-2 text-city-amber-400" />
-                  Todas as Luminárias
-                </span>
-                <Switch defaultChecked /> {/* Keep mock functionality for now */}
-              </div>
-            </div>
-            
-            <div>
-              <h3 className="text-sm font-medium mb-3">Brilho Global</h3>
-              <div className="space-y-2">
-                <div className="flex justify-between text-sm">
-                  <span>50%</span>
-                  <span>75%</span>
-                  <span>100%</span>
-                </div>
-                <input
-                  type="range"
-                  min="0"
-                  max="100"
-                  defaultValue="75" // Keep mock functionality for now
-                  className="w-full h-2 bg-city-blue-100 rounded-lg appearance-none cursor-pointer"
-                />
-              </div>
-            </div>
-            
-            <div>
-              <h3 className="text-sm font-medium mb-3">Programação</h3>
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1">
-                  <label className="text-xs text-gray-500">Ligar</label>
-                  <div className="flex items-center gap-2">
-                    <Clock size={14} className="text-gray-500" />
-                    <input
-                      type="time"
-                      defaultValue="18:00" // Keep mock functionality for now
-                      className="p-1.5 text-sm bg-white/50 border border-gray-200 rounded-md w-full"
-                    />
-                  </div>
-                </div>
-                <div className="space-y-1">
-                  <label className="text-xs text-gray-500">Desligar</label>
-                  <div className="flex items-center gap-2">
-                    <Clock size={14} className="text-gray-500" />
-                    <input
-                      type="time"
-                      defaultValue="06:00" // Keep mock functionality for now
-                      className="p-1.5 text-sm bg-white/50 border border-gray-200 rounded-md w-full"
-                    />
-                  </div>
-                </div>
-              </div>
-            </div>
-            
-            <div className="flex justify-end">
-              <Button size="sm">Aplicar Configurações</Button> {/* Keep mock functionality for now */}
-            </div>
-          </Card>
-        </div>
-      </div>
-
+      </div> {/* Closing tag for grid */}
       {/* Charts */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
         <ChartCard
