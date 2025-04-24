@@ -1,5 +1,5 @@
 import useFirebaseData from "@/hooks/useFirebaseData";
-import React from "react";
+import React, { useMemo } from "react"; // Importar useMemo
 import { motion } from "framer-motion";
 import DashboardLayout from "@/layout/DashboardLayout";
 import { StatsCard } from "@/components/StatsCard";
@@ -18,7 +18,7 @@ import {
 } from "lucide-react";
 import { StatusIndicator } from "@/components/StatusIndicator";
 
-// Mock data for our dashboard
+// Mock data for our dashboard (manter para gráficos que ainda não usam Firebase)
 const deviceStats = [
   { name: "Jan", value: 342 },
   { name: "Fev", value: 385 },
@@ -55,37 +55,12 @@ const energyConsumptionData = [
   { name: "Jul", consumption: 1240 },
 ];
 
-const alertsData = [
-  {
-    id: 1,
-    title: "Falha no sensor de iluminação",
-    message: "O sensor de iluminação ID-3245 não está respondendo há 15 minutos.",
-    timestamp: "Há 35 minutos",
-    location: "Av. Paulista, 1000",
-    severity: "warning",
-  },
-  {
-    id: 2,
-    title: "Congestionamento severo detectado",
-    message: "Tráfego intenso detectado na região central. Tempo de espera estimado: 25 min.",
-    timestamp: "Há 12 minutos",
-    location: "Av. Rebouças",
-    severity: "critical",
-  },
-  {
-    id: 3,
-    title: "Qualidade do ar abaixo do ideal",
-    message: "Níveis de poluição acima do normal detectados na zona leste.",
-    timestamp: "Há 1 hora",
-    location: "Zona Leste",
-    severity: "info",
-  },
-];
 
 const Index = () => {
   const { data: alertsDataFirebase, loading: alertsLoading, error: alertsError } = useFirebaseData('/alerts');
   const { data: deviceStatusDataFirebase, loading: deviceStatusLoading, error: deviceStatusError } = useFirebaseData('/device_status');
-  const { data: lightingStatusDataFirebase, loading: lightingStatusLoading, error: lightingStatusError } = useFirebaseData('/lighting_status');
+  // Alterar o hook para usar /lightning_devices
+  const { data: lightningDevicesDataFirebase, loading: lightningDevicesLoading, error: lightningDevicesError } = useFirebaseData('/lightning_devices');
   const { data: trafficSensorsDataFirebase, loading: trafficSensorsLoading, error: trafficSensorsError } = useFirebaseData('/traffic_sensors');
   const { data: environmentalSensorsDataFirebase, loading: environmentalSensorsLoading, error: environmentalSensorsError } = useFirebaseData('/environmental_sensors');
 
@@ -96,18 +71,18 @@ const Index = () => {
     ...alertsDataFirebase[key]
   })) : [];
 
-  // Calculate device counts
+  // Calculate device counts (ainda usando device_status para total e online/offline geral)
   const totalDevices = deviceStatusDataFirebase ? Object.keys(deviceStatusDataFirebase).length : 0;
   const onlineDevices = deviceStatusDataFirebase ? Object.values(deviceStatusDataFirebase).filter((device: any) => device.status === 'ONLINE').length : 0;
   const offlineDevices = totalDevices - onlineDevices;
 
-  // Calculate lighting stats
-  const totalLightingDevices = deviceStatusDataFirebase ? Object.values(deviceStatusDataFirebase).filter((device: any) => device.deviceType === 'lighting').length : 0;
-  const lightsOn = lightingStatusDataFirebase ? Object.values(lightingStatusDataFirebase).filter((light: any) => light.status === true).length : 0;
+  // Calculate lighting stats using /lightning_devices
+  const totalLightingDevices = lightningDevicesDataFirebase ? Object.keys(lightningDevicesDataFirebase).length : 0;
+  const lightsOn = lightningDevicesDataFirebase ? Object.values(lightningDevicesDataFirebase).filter((light: any) => light.status === 'ONLINE').length : 0; // Assumindo status ONLINE/OFFLINE em lightning_devices
   const lightsOnPercentage = totalLightingDevices > 0 ? ((lightsOn / totalLightingDevices) * 100).toFixed(0) : 0;
 
 
-  // Calculate traffic stats
+  // Calculate traffic stats (ainda usando dados antigos)
   const totalTrafficSensors = deviceStatusDataFirebase ? Object.values(deviceStatusDataFirebase).filter((device: any) => device.deviceType === 'traffic_sensor').length : 0;
   const monitoredRoads = trafficSensorsDataFirebase ? Object.keys(trafficSensorsDataFirebase).length : 0;
   // Simple aggregation for traffic flow (can be improved)
@@ -119,7 +94,7 @@ const Index = () => {
   const dominantTrafficFlow = Object.keys(trafficFlowSummary).sort((a, b) => trafficFlowSummary[b] - trafficFlowSummary[a])[0] || 'N/A';
 
 
-  // Calculate environmental stats
+  // Calculate environmental stats (ainda usando dados antigos)
   const totalEnvironmentalSensors = deviceStatusDataFirebase ? Object.values(deviceStatusDataFirebase).filter((device: any) => device.deviceType === 'environmental_sensor').length : 0;
   const airQualityLevels = environmentalSensorsDataFirebase ? Object.values(environmentalSensorsDataFirebase).map((sensor: any) => sensor.readings?.air_quality?.general_aqi_level).filter(Boolean) : [];
   const airQualitySummary = airQualityLevels.length > 0 ? airQualityLevels.reduce((acc: any, level: string) => {
@@ -135,13 +110,74 @@ const Index = () => {
   const averageHumidity = humidities.length > 0 ? (humidities.reduce((sum, humidity) => sum + humidity, 0) / humidities.length).toFixed(1) : 'N/A';
 
 
+  // Combine data for the map (precisa ser ajustado para usar lightning_devices)
+  const devicesForMap = useMemo(() => {
+    const mapDevices: any[] = [];
+
+    // Add lighting devices from /lightning_devices
+    if (lightningDevicesDataFirebase) {
+      Object.keys(lightningDevicesDataFirebase).forEach(key => {
+        const deviceData = lightningDevicesDataFirebase[key];
+        if (deviceData.location && deviceData.location.lat !== undefined && deviceData.location.lng !== undefined) {
+           mapDevices.push({
+             id: key,
+             lat: deviceData.location.lat,
+             lng: deviceData.location.lng,
+             type: 'lighting', // Explicitly set type
+             status: deviceData.status, // Use status from lightning_devices
+             location: { description: deviceData.location.description || 'Localização desconhecida' }
+           });
+        }
+      });
+    }
+
+    // Add traffic sensors from /traffic_sensors (assuming they have location and type)
+     if (trafficSensorsDataFirebase) {
+       Object.keys(trafficSensorsDataFirebase).forEach(key => {
+         const deviceData = trafficSensorsDataFirebase[key];
+         if (deviceData.location && deviceData.location.lat !== undefined && deviceData.location.lng !== undefined) {
+            mapDevices.push({
+              id: key,
+              lat: deviceData.location.lat,
+              lng: deviceData.location.lng,
+              type: 'traffic', // Explicitly set type
+              status: deviceData.status, // Use status from traffic_sensors if available
+              flow_intensity: deviceData.traffic_flow?.flow_intensity, // Include flow intensity
+              location: { description: deviceData.location.description || 'Localização desconhecida' }
+            });
+         }
+       });
+     }
+
+     // Add environmental sensors from /environmental_sensors (assuming they have location and type)
+      if (environmentalSensorsDataFirebase) {
+        Object.keys(environmentalSensorsDataFirebase).forEach(key => {
+          const deviceData = environmentalSensorsDataFirebase[key];
+          if (deviceData.location && deviceData.location.lat !== undefined && deviceData.location.lng !== undefined) {
+             mapDevices.push({
+               id: key,
+               lat: deviceData.location.lat,
+               lng: deviceData.location.lng,
+               type: 'environmental', // Explicitly set type
+               status: deviceData.status, // Use status from environmental_sensors if available
+               location: { description: deviceData.location.description || 'Localização desconhecida' }
+             });
+          }
+        });
+      }
+
+
+    return mapDevices;
+  }, [lightningDevicesDataFirebase, trafficSensorsDataFirebase, environmentalSensorsDataFirebase]); // Dependências do useMemo
+
+
   // Handle loading and error states for all data
-  if (alertsLoading || deviceStatusLoading || lightingStatusLoading || trafficSensorsLoading || environmentalSensorsLoading) {
+  if (alertsLoading || deviceStatusLoading || lightningDevicesLoading || trafficSensorsLoading || environmentalSensorsLoading) {
     return <DashboardLayout><div>Carregando dados do Firebase...</div></DashboardLayout>;
   }
 
-  if (alertsError || deviceStatusError || lightingStatusError || trafficSensorsError || environmentalSensorsError) {
-    return <DashboardLayout><div>Erro ao carregar dados do Firebase: {alertsError?.message || deviceStatusError?.message || lightingStatusError?.message || trafficSensorsError?.message || environmentalSensorsError?.message}</div></DashboardLayout>;
+  if (alertsError || deviceStatusError || lightningDevicesError || trafficSensorsError || environmentalSensorsError) {
+    return <DashboardLayout><div>Erro ao carregar dados do Firebase: {alertsError?.message || deviceStatusError?.message || lightningDevicesError?.message || trafficSensorsError?.message || environmentalSensorsError?.message}</div></DashboardLayout>;
   }
 
 
@@ -200,8 +236,15 @@ const Index = () => {
                 <StatusIndicator variant="offline">{`Offline (${offlineDevices})`}</StatusIndicator>
               </div>
             </div>
-            {/* Map component will need to be updated to use real location data */}
-            <Map height="400px" />
+            {/* Map component using combined real data */}
+            <Map
+              height="400px"
+              devices={devicesForMap}
+              showDevices={true}
+              centerLat={-12.2368} // Latitude de Feira de Santana
+              centerLng={-38.9567} // Longitude de Feira de Santana
+              zoom={12} // Ajustar zoom para a cidade
+            />
           </div>
         </div>
         <div>
@@ -226,27 +269,6 @@ const Index = () => {
             ))}
           </div>
         </div>
-      </div>
-
-      {/* Charts */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
-        {/* Charts still use mock data - need to implement data processing */}
-        <ChartCard
-          title="Dispositivos por Tempo"
-          description="Crescimento mensal da rede"
-          data={deviceStats} // Keep mock data for now
-          type="area"
-          dataKeys={["value"]}
-          colors={["#0064FF"]}
-        />
-        <ChartCard
-          title="Status dos Dispositivos"
-          description="Dispositivos online vs offline"
-          data={deviceStatusData} // Keep mock data for now
-          type="bar"
-          dataKeys={["online", "offline"]}
-          colors={["#00E673", "#FF6E65"]}
-        />
       </div>
 
       {/* Monitoring Section */}

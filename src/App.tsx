@@ -16,6 +16,7 @@ import Reports from "./pages/Reports";
 import Settings from "./pages/Settings";
 import NotFound from "./pages/NotFound";
 import Devices from "./pages/Devices";
+import Poles from "./pages/Poles"; // Importar o componente Poles
 
 const queryClient = new QueryClient();
 
@@ -30,6 +31,7 @@ const App = () => (
           <Routes>
             <Route path="/" element={<Index />} />
             <Route path="/lighting" element={<Lighting />} />
+            <Route path="/lighting/poles" element={<Poles />} /> {/* Adicionar a rota para Poles */}
             <Route path="/traffic" element={<Traffic />} />
             <Route path="/environment" element={<Environment />} />
             <Route path="/alerts" element={<Alerts />} />

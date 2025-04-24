@@ -12,6 +12,9 @@ import {
   Menu,
   ChevronLeft,
   ChevronRight,
+  Circle, // Importar ícone genérico para subseções
+  MapPin, // Ícone para Postes (exemplo)
+  Settings2, // Ícone para Configurações (exemplo)
 } from "lucide-react";
 import { motion } from "framer-motion";
 import {
@@ -35,9 +38,9 @@ const Navbar: React.FC<NavbarProps> = ({ sidebarOpen, setSidebarOpen }) => {
       name: "Iluminação",
       icon: Lightbulb,
       children: [
-        { name: "Visão Geral", path: "/lighting" },
-        { name: "Postes", path: "/lighting/poles" },
-        { name: "Configurações", path: "/lighting/settings" },
+        { name: "Visão Geral", path: "/lighting", icon: Circle }, // Adicionar ícone
+        { name: "Postes", path: "/lighting/poles", icon: MapPin }, // Adicionar ícone
+        { name: "Configurações", path: "/lighting/settings", icon: Settings2 }, // Adicionar ícone
       ]
     },
     { name: "Tráfego", path: "/traffic", icon: Car },
@@ -125,6 +128,7 @@ const Navbar: React.FC<NavbarProps> = ({ sidebarOpen, setSidebarOpen }) => {
                                           : "hover:bg-white/10"
                                       }`}
                                     >
+                                      {child.icon && <child.icon size={16} className="mr-2" />} {/* Renderizar ícone da subseção */}
                                       {sidebarOpen && <span className="ml-3 font-medium">{child.name}</span>}
                                       {isChildActive && sidebarOpen && (
                                         <motion.div

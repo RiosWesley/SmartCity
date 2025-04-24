@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from "react"; // Import useState and useMemo
+import React, { useState, useMemo, useEffect } from "react"; // Import useState, useMemo, useEffect
 import { motion } from "framer-motion";
 import DashboardLayout from "@/layout/DashboardLayout";
 import { StatsCard } from "@/components/StatsCard";
@@ -20,29 +20,51 @@ import {
 } from "@/components/ui/select";
 
 
-const Lighting = () => {
-  const { data: lightingStatus, loading: loadingLightingStatus, error: errorLightingStatus } = useFirebaseData("lighting_status");
-  const { data: deviceStatus, loading: loadingDeviceStatus, error: errorDeviceStatus } = useFirebaseData("device_status");
+// Interface para a estrutura dos dados de postes de iluminação em /lightning_devices
+interface LightningDevice {
+  id: string;
+  deviceType: "lighting";
+  status: "ONLINE" | "OFFLINE" | "WARNING"; // Status do dispositivo (online/offline/warning)
+  last_update_timestamp: number;
+  location: {
+    lat: number;
+    lng: number;
+    description: string;
+  };
+  reported_luminosity: number;
+  error_code: string | null;
+  macAddress?: string;
+  rssi?: number;
+  uptimeS?: number;
+  freeHeapB?: number;
+  batteryP?: number | null;
+  fwVersion?: string;
+  sysErr?: string | null;
+  // Adicionar outros campos conforme a estrutura em /lightning_devices
+}
 
-  // Process data for stats and table
-  const lightingDevices = Object.entries(lightingStatus || {})
-    .map(([id, status]) => {
-      // Ensure status is an object before spreading
-      if (typeof status === 'object' && status !== null) {
-        // Explicitly cast status to an object type if needed, or ensure the type of lightingStatus is correct
-        return { id, ...(status as any) }; // Using 'any' as a temporary workaround if type inference is the issue
-      }
-      return null; // Or handle appropriately if status is not an object
-    })
-    .filter(device => device !== null && deviceStatus?.[device.id]?.deviceType === 'lighting');
+
+const Lighting = () => {
+  // Usar apenas o hook para /lightning_devices
+  const { data: lightningDevicesDataFirebase, loading: loadingLightningDevices, error: errorLightningDevices } = useFirebaseData("/lightning_devices");
+
+  // Processar dados para stats e tabela usando apenas lightningDevicesDataFirebase
+  const lightingDevices: LightningDevice[] = useMemo(() => {
+    if (!lightningDevicesDataFirebase) return [];
+    return Object.keys(lightningDevicesDataFirebase).map(key => ({
+      id: key,
+      ...lightningDevicesDataFirebase[key] as any // Usar 'any' temporariamente se a inferência de tipo for um problema
+    }));
+  }, [lightningDevicesDataFirebase]);
+
 
   const totalDevices = lightingDevices.length;
-  const connectedDevices = lightingDevices.filter(device => deviceStatus?.[device.id]?.status === 'ONLINE').length;
-  const devicesWithIssues = lightingDevices.filter(device => device.error_code !== null || deviceStatus?.[device.id]?.sysErr !== null).length;
-  const devicesOn = lightingDevices.filter(device => device.status === true).length;
+  const connectedDevices = lightingDevices.filter(device => device.status === 'ONLINE').length; // Usar status de lightning_devices
+  const devicesWithIssues = lightingDevices.filter(device => device.error_code !== null || device.sysErr !== null).length; // Usar error_code e sysErr de lightning_devices
+  const devicesOn = lightingDevices.filter(device => device.reported_luminosity > 0).length; // Assumindo que reported_luminosity > 0 significa ligado
   const devicesOff = totalDevices - devicesOn;
 
-  // Mock data for lighting page
+  // Mock data for lighting page (manter para gráficos que ainda não usam Firebase)
   const energyConsumptionData = [
     { name: "00:00", consumption: 320 },
     { name: "04:00", consumption: 280 },
@@ -66,27 +88,26 @@ const Lighting = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10); // Default items per page
 
-  // Process data to match expected structure for map
+  // Processar dados para o mapa usando apenas lightningDevices
   const devicesForMap = useMemo(() => {
     const devices: any[] = [];
 
     lightingDevices.forEach(device => {
-      // Check if device has location data in deviceStatus
-      const deviceLocation = deviceStatus?.[device.id]?.location;
-      if (deviceLocation?.lat && deviceLocation?.lng) {
-        devices.push({
-          id: device.id,
-          lat: deviceLocation.lat,
-          lng: deviceLocation.lng,
-          type: 'lighting', // Type for map component
-          status: deviceStatus?.[device.id]?.status, // Get online/offline status from deviceStatusData
-          location: deviceLocation // Include location object for tooltip description
-        });
+      if (device.location?.lat !== undefined && device.location?.lng !== undefined) {
+         devices.push({
+           id: device.id,
+           lat: device.location.lat,
+           lng: device.location.lng,
+           type: 'lighting', // Explicitly set type
+           status: device.status, // Use status from lightning_devices
+           location: { description: device.location.description || 'Localização desconhecida' } // Transformar location string para objeto
+         });
       }
     });
 
     return devices;
-  }, [lightingDevices, deviceStatus]); // Dependencies for useMemo
+  }, [lightingDevices]); // Dependência do useMemo
+
 
   // Pagination logic for devicesForMap
   const totalDevicesForMap = devicesForMap.length;
@@ -109,19 +130,23 @@ const Lighting = () => {
 
 
   // Combine loading and error states for conditional rendering
+  const loading = loadingLightningDevices;
+  const error = errorLightningDevices;
+
 
   const lightingDeviceIssues = [
-    { id: 1, deviceId: "LT-2389", issue: "Sem resposta", location: "Av. Paulista, 1500", since: "2h 15m" },
-    { id: 2, deviceId: "LT-4501", issue: "Baixa voltagem", location: "R. Augusta, 300", since: "48m" },
-    { id: 3, deviceId: "LT-1276", issue: "Falha no sensor", location: "Pq. Ibirapuera", since: "1h 30m" },
+    // TODO: Obter dados de problemas de dispositivos de iluminação do Firebase (talvez do nó /alerts filtrando por sourceDeviceType: "lighting")
+    { id: 1, deviceId: "LT-2389", issue: "Sem resposta", location: "Av. Paulista, 1500", since: "2h 15m" }, // Mock data
+    { id: 2, deviceId: "LT-4501", issue: "Baixa voltagem", location: "R. Augusta, 300", since: "48m" }, // Mock data
+    { id: 3, deviceId: "LT-1276", issue: "Falha no sensor", location: "Pq. Ibirapuera", since: "1h 30m" }, // Mock data
   ];
 
-  if (loadingLightingStatus || loadingDeviceStatus) {
+  if (loading) {
     return <DashboardLayout><div>Carregando dados de iluminação...</div></DashboardLayout>;
   }
 
-  if (errorLightingStatus || errorDeviceStatus) {
-    return <DashboardLayout><div>Erro ao carregar dados de iluminação: {errorLightingStatus?.message || errorDeviceStatus?.message}</div></DashboardLayout>;
+  if (error) {
+    return <DashboardLayout><div>Erro ao carregar dados de iluminação: {error.message}</div></DashboardLayout>;
   }
 
   return (
@@ -177,8 +202,16 @@ const Lighting = () => {
               <StatusIndicator variant="offline">Desligadas ({devicesOff})</StatusIndicator>
             </div>
           </div>
-          <Map height="400px" deviceTypes={["lighting"]} devices={currentDevicesForMap} /> {/* Pass paginated devices */}
-          
+          <Map
+            height="400px"
+            deviceTypes={["lighting"]}
+            devices={currentDevicesForMap}
+            showDevices={true}
+            centerLat={-12.2368} // Latitude de Feira de Santana
+            centerLng={-38.9567} // Longitude de Feira de Santana
+            zoom={12} // Ajustar zoom para a cidade
+          />
+
         </div> {/* Closing tag for lg:col-span-2 */}
       </div> {/* Closing tag for grid */}
       {/* Charts */}
@@ -203,9 +236,9 @@ const Lighting = () => {
         />
       </div>
 
-      {/* Lighting Zones & Issues */}
+      {/* Lighting Devices Table and Issues */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Zones */}
+        {/* Devices Table */}
         <div className="lg:col-span-2">
           <h2 className="text-lg font-semibold mb-4">Dispositivos de Iluminação</h2>
           <div className="overflow-hidden rounded-xl glass-card border border-white/20">
@@ -240,19 +273,21 @@ const Lighting = () => {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-200">
-                  {lightingDevices.map((device) => (
+                  {currentDevicesForMap.map((device) => ( // Usar currentDevicesForMap para a tabela paginada
                     <tr key={device.id} className="hover:bg-gray-50/50">
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="text-sm font-medium">{device.id}</div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
-                        <Badge variant={device.status ? "default" : "outline"}>
-                          {device.status ? "Ligado" : "Desligado"}
+                        {/* Assumindo que status de iluminação é baseado em reported_luminosity > 0 */}
+                        <Badge variant={device.reported_luminosity > 0 ? "default" : "outline"}>
+                          {device.reported_luminosity > 0 ? "Ligado" : "Desligado"}
                         </Badge>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
-                        <Badge variant={deviceStatus?.[device.id]?.status === 'ONLINE' ? "default" : "destructive"}>
-                           {deviceStatus?.[device.id]?.status || 'Desconhecido'}
+                        {/* Usar status do dispositivo (ONLINE/OFFLINE/WARNING) */}
+                        <Badge variant={device.status === 'ONLINE' ? "default" : device.status === 'WARNING' ? "secondary" : "destructive"}>
+                           {device.status || 'Desconhecido'}
                          </Badge>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
@@ -265,7 +300,7 @@ const Lighting = () => {
                         <div className="text-sm">{device.location?.description || 'N/A'}</div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm">{device.error_code || deviceStatus?.[device.id]?.sysErr || 'Nenhum'}</div>
+                        <div className="text-sm">{device.error_code || device.sysErr || 'Nenhum'}</div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-right text-sm">
                         <button className="text-city-blue-500 hover:text-city-blue-700 mr-3">
@@ -280,6 +315,42 @@ const Lighting = () => {
                 </tbody>
               </table>
             </div>
+             {/* Pagination Controls */}
+             <div className="px-6 py-4 flex items-center justify-between">
+                <div className="flex items-center space-x-2">
+                  <span className="text-sm text-gray-700">Itens por página:</span>
+                  <Select value={itemsPerPage.toString()} onValueChange={handleItemsPerPageChange}>
+                    <SelectTrigger className="w-[70px]">
+                      <SelectValue placeholder={itemsPerPage} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="5">5</SelectItem>
+                      <SelectItem value="10">10</SelectItem>
+                      <SelectItem value="20">20</SelectItem>
+                      <SelectItem value="50">50</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <span className="text-sm text-gray-700">Página {currentPage} de {totalPages}</span>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handlePageChange(currentPage - 1)}
+                    disabled={currentPage === 1}
+                  >
+                    <ChevronLeft size={16} />
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handlePageChange(currentPage + 1)}
+                    disabled={currentPage === totalPages || totalPages === 0}
+                  >
+                    <ChevronRight size={16} />
+                  </Button>
+                </div>
+             </div>
           </div>
         </div>
 
