@@ -347,6 +347,7 @@ A estrutura do Realtime Database no Firebase é organizada da seguinte forma par
     *   [x] Substituir dados mockados na página Configurações (`src/pages/Settings.tsx`).
     *   [x] Substituir dados mockados na página Dispositivos (`src/pages/Devices.tsx`).
     *   [x] Implementar a funcionalidade de envio de comandos do frontend para os dispositivos ESP32 através da escrita de dados em um nó específico do Firebase Realtime Database (e.g., `/commands/[deviceId]`).
+    *   [x] Implementar a funcionalidade de adicionar novos dispositivos através da escrita de dados no nó `/device_status` no Firebase Realtime Database.
 
 2.  **Desenvolver o firmware para os dispositivos ESP32 (Após configuração do Firebase):**
     *   [ ] Configurar o ambiente de desenvolvimento para ESP32 (Arduino IDE ou PlatformIO) com as bibliotecas necessárias (e.g., `FirebaseESP32`, `WiFi`, `ArduinoJson`, bibliotecas de sensores específicos).

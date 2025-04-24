@@ -172,6 +172,17 @@ const DeviceCard = ({ device }: { device: Device }) => {
 };
 
 const DevicesPage: React.FC = () => {
+  const [isAddDeviceModalOpen, setIsAddDeviceModalOpen] = useState(false); // State for modal visibility
+  const [newDeviceData, setNewDeviceData] = useState({
+    id: "",
+    type: "",
+    locationDescription: "",
+    // Add other fields as needed for device creation
+  });
+
+  // Use the sendCommand hook for adding devices
+  const { sendCommand, loading: sendingCommand, error: sendError, success: sendSuccess } = useSendCommand();
+
   const [search, setSearch] = useState("");
   const [tab, setTab] = useState("all");
 
@@ -247,6 +258,45 @@ const DevicesPage: React.FC = () => {
     warning: devices.filter(d => d.status === "warning").length,
   };
 
+  const handleAddDevice = async () => {
+    if (!newDeviceData.id || !newDeviceData.type || !newDeviceData.locationDescription) {
+      console.error("Por favor, preencha todos os campos.");
+      // TODO: Add a more user-friendly error message (e.g., toast)
+      return;
+    }
+
+    const devicePath = `/device_status/${newDeviceData.id}`;
+    const devicePayload = {
+      deviceType: newDeviceData.type,
+      status: "OFFLINE", // New devices start as offline
+      last_seen_timestamp: Date.now(),
+      location: {
+        lat: 0, // Placeholder - ideally get from a map picker or input
+        lng: 0, // Placeholder
+        description: newDeviceData.locationDescription,
+      },
+      rssi: 0, // Placeholder
+      uptimeS: 0, // Placeholder
+      freeHeapB: 0, // Placeholder
+      batteryP: null, // Placeholder
+      fwVersion: "N/A", // Placeholder
+      sysErr: null, // Placeholder
+      // Add other initial fields as per your Firebase structure
+    };
+
+    await sendCommand(devicePath, devicePayload);
+
+    if (sendError) {
+      console.error("Erro ao adicionar dispositivo:", sendError);
+      // TODO: Show error to user
+    } else if (sendSuccess) {
+      console.log("Dispositivo adicionado com sucesso!");
+      // TODO: Show success to user
+      setIsAddDeviceModalOpen(false); // Close modal on success
+      setNewDeviceData({ id: "", type: "", locationDescription: "" }); // Reset form
+    }
+  };
+
   return (
     <DashboardLayout>
       <div className="mb-8">
@@ -282,6 +332,8 @@ const DevicesPage: React.FC = () => {
           </TabsList>
         </Tabs>
         <Button onClick={() => {setSearch(""); setTab("all")}} variant="outline" size="sm">Limpar</Button>
+        {/* Botão para adicionar novo dispositivo */}
+        <Button onClick={() => setIsAddDeviceModalOpen(true)} size="sm">Adicionar Dispositivo</Button>
       </div>
 
       {/* Lista de dispositivos */}
@@ -311,6 +363,42 @@ const DevicesPage: React.FC = () => {
           </Card>
         )}
       </div>
+
+      {/* Modal para adicionar novo dispositivo */}
+      {isAddDeviceModalOpen && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <Card className="p-6 w-full max-w-md">
+            <h2 className="text-xl font-bold mb-4">Adicionar Novo Dispositivo</h2>
+:start_line:334
+-------
+            <div className="space-y-4">
+              <Input
+                placeholder="ID do Dispositivo (Ex: esp32_005)"
+                value={newDeviceData.id}
+                onChange={(e) => setNewDeviceData({ ...newDeviceData, id: e.target.value })}
+              />
+              <Input
+                placeholder="Tipo do Dispositivo (Ex: lighting, traffic_sensor)"
+                value={newDeviceData.type}
+                onChange={(e) => setNewDeviceData({ ...newDeviceData, type: e.target.value })}
+              />
+              <Input
+                placeholder="Descrição da Localização (Ex: Rua A, Poste 1)"
+                value={newDeviceData.locationDescription}
+                onChange={(e) => setNewDeviceData({ ...newDeviceData, locationDescription: e.target.value })}
+              />
+              {/* Outros campos conforme necessário */}
+            </div>
+            <div className="flex justify-end gap-4 mt-6">
+              <Button variant="outline" onClick={() => setIsAddDeviceModalOpen(false)}>Cancelar</Button>
+              <Button onClick={handleAddDevice} disabled={sendingCommand}>
+                {sendingCommand ? <Loader2 size={14} className="animate-spin mr-2" /> : null}
+                Salvar
+              </Button>
+            </div>
+          </Card>
+        </div>
+      )}
     </DashboardLayout>
   );
 };
