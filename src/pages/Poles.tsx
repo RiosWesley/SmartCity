@@ -84,10 +84,21 @@ const Poles: React.FC = () => {
       // Transformar os dados do Firebase em um array de Pole
       const transformedPoles: Pole[] = Object.keys(firebasePolesData).map(key => {
         const poleData = firebasePolesData[key];
+        // Map Firebase status string to Pole status type
+        let poleStatus: 'Online' | 'Offline' | 'Maintenance' = 'Offline'; // Default to Offline
+        if (poleData.status === 'ONLINE') {
+          poleStatus = 'Online';
+        } else if (poleData.status === 'OFFLINE') {
+          poleStatus = 'Offline';
+        } else if (poleData.error_code) { // Assuming error_code indicates maintenance
+           poleStatus = 'Maintenance';
+        }
+        // Add other potential status mappings if needed based on Firebase data
+
         return {
           id: key,
           location: poleData.location?.description || 'Localização desconhecida',
-          status: poleData.status === true ? 'Online' : (poleData.error_code ? 'Maintenance' : 'Offline'), // Mapear status do Firebase
+          status: poleStatus, // Use the mapped status
           type: "lighting", // Definir o tipo como lighting
           rssi: poleData.rssi || 0, // Adicionar RSSI
           macAddress: poleData.macAddress || 'N/A', // Adicionar MAC Address
